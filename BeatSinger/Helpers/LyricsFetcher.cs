@@ -157,7 +157,7 @@ namespace BeatSinger
 
             Plugin.log?.Debug($"Song directory: {songDirectory}.");
             container = SubtitleContainer.Empty;
-            if (songDirectory == null)
+            if (string.IsNullOrWhiteSpace(songDirectory) || !Directory.Exists(songDirectory))
                 return false;
 
             // Find JSON lyrics
