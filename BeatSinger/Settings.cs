@@ -12,9 +12,10 @@ namespace BeatSinger
         public static Config Instance;
 
         public const string ModName = "BeatSinger";
+        public const string Section_Mod = "General";
+        public const string Section_TextStyle = "Text Style";
 
         public static bool DisplayLyrics { get; set; }
-
         public static int ToggleKeyCode { get; set; }
         public static float DisplayDelay { get; set; }
         public static float HideDelay { get; set; }
@@ -54,20 +55,20 @@ namespace BeatSinger
 
         public static void Save()
         {
-            Instance.SetBool(ModName, "Enabled", DisplayLyrics);
-            Instance.SetInt(ModName, nameof(ToggleKeyCode), ToggleKeyCode);
-            Instance.SetFloat(ModName, nameof(DisplayDelay), DisplayDelay);
-            Instance.SetFloat(ModName, nameof(HideDelay), HideDelay);
-            Instance.SetBool(ModName, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
-            Instance.SetBool(ModName, nameof(EnableShake), EnableShake);
-            Instance.SetFloat(ModName, nameof(TextSize), TextSize);
-            Instance.SetInt(ModName, "ColorR", (int)(TextColor.r * 255f));
-            Instance.SetInt(ModName, "ColorG", (int)(TextColor.g * 255f));
-            Instance.SetInt(ModName, "ColorB", (int)(TextColor.b * 255f));
-            Instance.SetInt(ModName, "ColorA", (int)(TextColor.a * 255f));
-            Instance.SetFloat(ModName, "PosX", Position.x);
-            Instance.SetFloat(ModName, "PosY", Position.y);
-            Instance.SetFloat(ModName, "PosZ", Position.z);
+            Instance.SetBool(Section_Mod, "Enabled", DisplayLyrics);
+            Instance.SetInt(Section_Mod, nameof(ToggleKeyCode), ToggleKeyCode);
+            Instance.SetFloat(Section_Mod, nameof(DisplayDelay), DisplayDelay);
+            Instance.SetFloat(Section_Mod, nameof(HideDelay), HideDelay);
+            Instance.SetBool(Section_Mod, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
+            Instance.SetBool(Section_TextStyle, nameof(EnableShake), EnableShake);
+            Instance.SetFloat(Section_TextStyle, nameof(TextSize), TextSize);
+            Instance.SetInt(Section_TextStyle, "ColorR", (int)(TextColor.r * 255f));
+            Instance.SetInt(Section_TextStyle, "ColorG", (int)(TextColor.g * 255f));
+            Instance.SetInt(Section_TextStyle, "ColorB", (int)(TextColor.b * 255f));
+            Instance.SetInt(Section_TextStyle, "ColorA", (int)(TextColor.a * 255f));
+            Instance.SetFloat(Section_TextStyle, "PosX", Position.x);
+            Instance.SetFloat(Section_TextStyle, "PosY", Position.y);
+            Instance.SetFloat(Section_TextStyle, "PosZ", Position.z);
             if (VerboseLogging)
                 Instance.SetBool(ModName, nameof(VerboseLogging), true);
         }
@@ -85,24 +86,24 @@ namespace BeatSinger
             else
                 defaultKeycode = (int)ConInput.WinMR.LeftThumbstickPress;
 
-            DisplayLyrics = Instance.GetBool(ModName, "Enabled", true);
-            ToggleKeyCode = Instance.GetInt(ModName, nameof(ToggleKeyCode), defaultKeycode);
-            DisplayDelay = Instance.GetFloat(ModName, nameof(DisplayDelay), -.1f);
-            HideDelay = Instance.GetFloat(ModName, nameof(HideDelay), 0f);
-            SaveFetchedLyrics = Instance.GetBool(ModName, nameof(SaveFetchedLyrics), true);
+            DisplayLyrics = Instance.GetBool(Section_Mod, "Enabled", true, true);
+            ToggleKeyCode = Instance.GetInt(Section_Mod, nameof(ToggleKeyCode), defaultKeycode, true);
+            DisplayDelay = Instance.GetFloat(Section_Mod, nameof(DisplayDelay), -.1f, true);
+            HideDelay = Instance.GetFloat(Section_Mod, nameof(HideDelay), 0f, true);
+            SaveFetchedLyrics = Instance.GetBool(Section_Mod, nameof(SaveFetchedLyrics), true, true);
+            EnableShake = Instance.GetBool(Section_TextStyle, nameof(EnableShake), false, true);
+            TextSize = Instance.GetFloat(Section_TextStyle, nameof(TextSize), 4f, true);
 
-            TextSize = Instance.GetFloat(ModName, nameof(TextSize), 4f, true);
             TextColor = new Color(
-                Instance.GetInt(ModName, "ColorR", 0, true) / 255f,
-                Instance.GetInt(ModName, "ColorG", 190, true) / 255f,
-                Instance.GetInt(ModName, "ColorB", 255, true) / 255f,
-                Instance.GetInt(ModName, "ColorA", 255, true) / 255f);
+                Instance.GetInt(Section_TextStyle, "ColorR", 0, true) / 255f,
+                Instance.GetInt(Section_TextStyle, "ColorG", 190, true) / 255f,
+                Instance.GetInt(Section_TextStyle, "ColorB", 255, true) / 255f,
+                Instance.GetInt(Section_TextStyle, "ColorA", 255, true) / 255f);
             Position = new Vector3(
-                Instance.GetFloat(ModName, "PosX", 0, true),
-                Instance.GetFloat(ModName, "PosY", 4, true),
-                Instance.GetFloat(ModName, "PosZ", 0, true));
+                Instance.GetFloat(Section_TextStyle, "PosX", 0, true),
+                Instance.GetFloat(Section_TextStyle, "PosY", 4, true),
+                Instance.GetFloat(Section_TextStyle, "PosZ", 0, true));
 
-            EnableShake = Instance.GetBool(ModName, nameof(EnableShake), false, true);
             VerboseLogging = Instance.GetBool(ModName, nameof(VerboseLogging), false);
         }
     }
