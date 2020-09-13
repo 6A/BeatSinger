@@ -79,18 +79,20 @@ namespace BeatSinger
 
             StringBuilder text = new StringBuilder();
             string line;
-
+            int lineNumber = 0;
             while ((line = reader.ReadLine()) != null && !invalid)
             {
+                lineNumber++;
                 switch (state)
                 {
                     case 0:
-                        if (string.IsNullOrEmpty(line))
+                        if (string.IsNullOrWhiteSpace(line))
                             // No number found; continue in same state.
                             continue;
 
                         if (!int.TryParse(line, out int _))
                         {
+                            Plugin.log?.Warn($"Line {lineNumber}: {line} is not an integer.");
                             invalid = true;
                             break;
                         }
@@ -104,6 +106,7 @@ namespace BeatSinger
 
                         if (!m.Success)
                         {
+                            Plugin.log?.Error($"Invalid line in SRT file, line {lineNumber}: '{line}'");
                             invalid = true;
                             break;
                         }
@@ -120,11 +123,10 @@ namespace BeatSinger
                         break;
 
                     case 2:
-                        if (string.IsNullOrEmpty(line))
+                        if (string.IsNullOrWhiteSpace(line))
                         {
                             // End of text; continue to next state.
                             subtitles.Add(new Subtitle(text.ToString(), startTime, endTime));
-
                             text.Length = 0;
                             state = 0;
                         }
@@ -138,8 +140,17 @@ namespace BeatSinger
 
                     default:
                         // Shouldn't happen.
-                        throw new Exception($"Invalid syntax in SRT file: '{line}'");
+                        throw new Exception($"Invalid syntax in SRT file on line {lineNumber}: '{line}'");
                 }
+            }
+            // From https://github.com/y0100100012/BeatSinger/blob/59b49b16b28d30a270d72df3e691d0d923dd2a14/BeatSinger/Helpers/LyricsFetcher.cs#L151
+            //Add Last Subtitle if end is reached with text not empty
+            if (text.Length != 0)
+            {
+                subtitles.Add(new Subtitle(text.ToString(), startTime, endTime));
+                //             Debug.Log($"{text}   {startTime}   {endTime}");
+                text.Length = 0;
+                state = 0;
             }
             if (invalid)
             {
