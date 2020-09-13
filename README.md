@@ -9,8 +9,8 @@ Displays song lyrics in-game.
 > If you want to use them anyway, you'll have to edit their metadata manually so that the song and artist names are valid.
 
 ## Installation
-After installing the [custom song loader](https://github.com/xyonico/BeatSaberSongLoader), drop
-[`BeatSinger.dll`](https://github.com/6A/BeatSinger/releases) into the `Beat Saber/Plugins` directory.
+* Requires [`SongCore`](https://github.com/Kylemc1413/SongCore) and [`BS_Utils`](https://github.com/Kylemc1413/Beat-Saber-Utils), available on [BeatMods](https://beatmods.com/#/mods)
+* Drop [`BeatSinger.dll`](https://github.com/71/BeatSinger/releases) into the `Beat Saber/Plugins` directory.
 
 ## Usage
 - When lyrics for a song can be found, the message "lyrics found" will be shown at the beginning of the level song.
