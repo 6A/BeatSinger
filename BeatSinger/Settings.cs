@@ -60,6 +60,8 @@ namespace BeatSinger
             Instance.SetFloat(Section_Mod, nameof(DisplayDelay), DisplayDelay);
             Instance.SetFloat(Section_Mod, nameof(HideDelay), HideDelay);
             Instance.SetBool(Section_Mod, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
+            if (VerboseLogging)
+                Instance.SetBool(Section_Mod, nameof(VerboseLogging), true);
             Instance.SetBool(Section_TextStyle, nameof(EnableShake), EnableShake);
             Instance.SetFloat(Section_TextStyle, nameof(TextSize), TextSize);
             Instance.SetInt(Section_TextStyle, "ColorR", (int)(TextColor.r * 255f));
@@ -69,8 +71,6 @@ namespace BeatSinger
             Instance.SetFloat(Section_TextStyle, "PosX", Position.x);
             Instance.SetFloat(Section_TextStyle, "PosY", Position.y);
             Instance.SetFloat(Section_TextStyle, "PosZ", Position.z);
-            if (VerboseLogging)
-                Instance.SetBool(ModName, nameof(VerboseLogging), true);
         }
 
         public static void Load()
@@ -91,6 +91,8 @@ namespace BeatSinger
             DisplayDelay = Instance.GetFloat(Section_Mod, nameof(DisplayDelay), -.1f, true);
             HideDelay = Instance.GetFloat(Section_Mod, nameof(HideDelay), 0f, true);
             SaveFetchedLyrics = Instance.GetBool(Section_Mod, nameof(SaveFetchedLyrics), true, true);
+            VerboseLogging = Instance.GetBool(Section_Mod, nameof(VerboseLogging), false, true);
+
             EnableShake = Instance.GetBool(Section_TextStyle, nameof(EnableShake), false, true);
             TextSize = Instance.GetFloat(Section_TextStyle, nameof(TextSize), 4f, true);
 
@@ -103,8 +105,6 @@ namespace BeatSinger
                 Instance.GetFloat(Section_TextStyle, "PosX", 0, true),
                 Instance.GetFloat(Section_TextStyle, "PosY", 4, true),
                 Instance.GetFloat(Section_TextStyle, "PosZ", 0, true));
-
-            VerboseLogging = Instance.GetBool(ModName, nameof(VerboseLogging), false);
         }
     }
 }
