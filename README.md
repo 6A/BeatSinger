@@ -28,8 +28,29 @@ BeatSinger will thus load lyrics in the following order:
 1. File named `lyrics.json` in the directory of the song.
 2. File named `lyrics.srt` in the directory of the song.
 3. Online resolution.
+   * Songs fetched from online services will be saved to the song folder as `lyrics.json` if `SaveFetchedLyrics` is enabled in the config file.
 
-#### JSON files must have the following format:
+#### JSON files must have one the following formats:
+* Local lyrics files can specify a `timeOffset` and/or `timeScale` to change the timing for all lyrics
+  * `timeOffset` will change all `time` and `end` (if used) by the specified number of seconds. Default is `0`.
+  * `timeScale` will multiply all `time` and `end` (if used) by the given value. This is useful for songs that have been sped up or slowed down by the mapper. Default is `1`.
+```json
+{
+  "timeOffset" : 1.5,
+  "timeScale" : 0.98,
+  "subtitles" : [
+    {
+      "text" : "Never gonna give you up",
+      "time" : 10.00,
+      "end": 11.10
+    },
+    {
+      "text" : "Never gonna let you down",
+      "time" : 11.24
+    }
+  ]
+}
+```
 ```json
 [
   { "text": "Never gonna give you up", "time": 10.00, "end": 11.10 },
