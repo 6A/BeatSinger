@@ -20,54 +20,6 @@ namespace BeatSinger
     {
         private const BindingFlags NON_PUBLIC_INSTANCE = BindingFlags.NonPublic | BindingFlags.Instance;
 
-        private static readonly FieldAccessor<GameSongController, AudioTimeSyncController>.Accessor Access_AudioTimeSync
-            = FieldAccessor<GameSongController, AudioTimeSyncController>.GetAccessor("_audioTimeSyncController");
-
-        private static readonly FieldAccessor<GameplayCoreSceneSetup, GameplayCoreSceneSetupData>.Accessor Access_SceneSetupData
-            = FieldAccessor<GameplayCoreSceneSetup, GameplayCoreSceneSetupData>.GetAccessor("_sceneSetupData");
-
-
-        private static readonly FieldAccessor<MonoInstallerBase, DiContainer>.Accessor Access_DiContainer
-            = FieldAccessor<MonoInstallerBase, DiContainer>.GetAccessor("<Container>k__BackingField");
-
-        private static readonly FieldAccessor<FlyingTextSpawner, FlyingTextEffect.Pool>.Accessor Access_FlyingTextEffectPool
-            = FieldAccessor<FlyingTextSpawner, FlyingTextEffect.Pool>.GetAccessor("_flyingTextEffectPool");
-
-        private static readonly Func<FlyingTextSpawner, float> GetTextSpawnerDuration;
-        private static readonly Action<FlyingTextSpawner, float> SetTextSpawnerDuration;
-
-        static LyricsComponent()
-        {
-            FieldInfo durationField = typeof(FlyingTextSpawner).GetField("_duration", NON_PUBLIC_INSTANCE);
-
-            if (durationField == null)
-                throw new Exception("Cannot find _duration field of FlyingTextSpawner.");
-
-            // Create dynamic setter
-            DynamicMethod setterMethod = new DynamicMethod("SetDuration", typeof(void), new[] { typeof(FlyingTextSpawner), typeof(float) }, typeof(FlyingTextSpawner));
-            ILGenerator setterIl = setterMethod.GetILGenerator(16);
-
-            setterIl.Emit(OpCodes.Ldarg_0);
-            setterIl.Emit(OpCodes.Ldarg_1);
-            setterIl.Emit(OpCodes.Stfld, durationField);
-            setterIl.Emit(OpCodes.Ret);
-
-            SetTextSpawnerDuration = setterMethod.CreateDelegate(typeof(Action<FlyingTextSpawner, float>))
-                                  as Action<FlyingTextSpawner, float>;
-
-            // Create dynamic getter
-            DynamicMethod getterMethod = new DynamicMethod("GetDuration", typeof(float), new[] { typeof(FlyingTextSpawner) }, typeof(FlyingTextSpawner));
-            ILGenerator getterIl = getterMethod.GetILGenerator(16);
-
-            getterIl.Emit(OpCodes.Ldarg_0);
-            getterIl.Emit(OpCodes.Ldfld, durationField);
-            getterIl.Emit(OpCodes.Ret);
-
-            GetTextSpawnerDuration = getterMethod.CreateDelegate(typeof(Func<FlyingTextSpawner, float>))
-                                  as Func<FlyingTextSpawner, float>;
-        }
-
-
         private GameSongController songController;
         private FlyingTextSpawner textSpawner;
         private AudioTimeSyncController audio;
@@ -96,17 +48,17 @@ namespace BeatSinger
             if (textSpawner == null)
             {
                 var installer = sceneSetup as MonoInstallerBase;
-                var diContainer = Access_DiContainer(ref installer);
+                var diContainer = Accessors.Access_DiContainer(ref installer);
 
                 textSpawner = diContainer.InstantiateComponentOnNewGameObject<FlyingTextSpawner>();
             }
 
-            var sceneSetupData = Access_SceneSetupData(ref sceneSetup);
+            var sceneSetupData = Accessors.Access_SceneSetupData(ref sceneSetup);
 
             if (sceneSetupData == null)
                 yield break;
 
-            audio = Access_AudioTimeSync(ref songController);
+            audio = Accessors.Access_AudioTimeSync(ref songController);
 
             IBeatmapLevel level = sceneSetupData.difficultyBeatmap.level;
 
@@ -193,6 +145,10 @@ namespace BeatSinger
 
         public void Update()
         {
+#if DEBUG
+            if (Input.GetKeyDown(KeyCode.R))
+                Settings.Load();
+#endif
             if (!Input.GetKeyUp((KeyCode)Settings.ToggleKeyCode))
                 return;
 
@@ -242,21 +198,50 @@ namespace BeatSinger
                 if (Settings.VerboseLogging)
                     Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 
-                SpawnText(subtitle.Text, displayDuration + Settings.HideDelay);
+                SpawnText(subtitle.Text, displayDuration + Settings.HideDelay, Settings.EnableShake, Settings.TextColor, Settings.TextSize);
             }
         }
 
-        private void SpawnText(string text, float duration)
+        private void SpawnText(string text, float duration) => SpawnText(text, duration, false, null, Settings.TextSize);
+
+        private void SpawnText(string text, float duration, bool enableShake, Color? color, float fontSize)
         {
             // Little hack to spawn text for a chosen duration in seconds:
             // Save the initial float _duration field to a variable,
             // then set it to the chosen duration, call SpawnText, and restore the
             // previously saved duration.
-            float initialDuration = GetTextSpawnerDuration(textSpawner);
+            float initialDuration = Accessors.Access_FlyingTextDuration(ref textSpawner);
+            bool initialShake = Accessors.Access_FlyingTextShake(ref textSpawner);
+            Color initialcolor = Accessors.Access_FlyingTextColor(ref textSpawner);
+            float initialSize = Accessors.Access_FlyingTextFontSize(ref textSpawner);
 
-            SetTextSpawnerDuration(textSpawner, duration);
-            textSpawner.SpawnText(new Vector3(0, 4, 0), Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
-            SetTextSpawnerDuration(textSpawner, initialDuration);
+            if (Settings.VerboseLogging)
+            {
+                Plugin.log?.Info($"Inital Text Settings:");
+                Plugin.log?.Info($"       Duration: {duration}");
+                Plugin.log?.Info($"   ShakeEnabled: {(enableShake ? "True" : "False")}");
+                Plugin.log?.Info($"          Color: {(color?.ToString() ?? "Default")}");
+                Plugin.log?.Info($"           Size: {fontSize}");
+            }
+            if(duration <= 0)
+            {
+                Plugin.log?.Warn($"Text '{text}' has a duration less than 0. Using 1s instead.");
+                duration = 1;
+            }
+            Accessors.Access_FlyingTextDuration(ref textSpawner) = duration;
+            Accessors.Access_FlyingTextShake(ref textSpawner) = enableShake;
+            if (color.HasValue)
+                Accessors.Access_FlyingTextColor(ref textSpawner) = color.Value;
+            if(fontSize > 0)
+                Accessors.Access_FlyingTextFontSize(ref textSpawner) = fontSize;
+
+            textSpawner.SpawnText(Settings.Position, Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
+
+            // Reset values
+            Accessors.Access_FlyingTextDuration(ref textSpawner) = initialDuration;
+            Accessors.Access_FlyingTextShake(ref textSpawner) = initialShake;
+            Accessors.Access_FlyingTextColor(ref textSpawner) = initialcolor;
+            Accessors.Access_FlyingTextFontSize(ref textSpawner) = initialSize;
         }
     }
 }
