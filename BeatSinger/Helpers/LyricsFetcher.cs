@@ -177,8 +177,10 @@ namespace BeatSinger
             if (File.Exists(jsonFile))
             {
                 PopulateFromJson(File.ReadAllText(jsonFile), container);
-
-                return container.Count > 0;
+                container.Source = jsonFile;
+                container.SourceType = LyricSource.File_JSON;
+                if (container.Count > 0)
+                    return true;
             }
 
             // Find SRT lyrics
@@ -191,6 +193,8 @@ namespace BeatSinger
                 {
                     List<Subtitle> subtitles = new List<Subtitle>();
                     PopulateFromSrt(reader, subtitles);
+                    container.Source = srtFile;
+                    container.SourceType = LyricSource.File_SRT;
                     if (subtitles.Count > 0)
                         container.SetSubtitles(subtitles);
                     return container.Count > 0;

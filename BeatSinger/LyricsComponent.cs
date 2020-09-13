@@ -68,9 +68,12 @@ namespace BeatSinger
             CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
             if (Plugin.config.VerboseLogging)
                 Plugin.log?.Debug($"{level.songName} is {(customLevel != null ? "" : "not ")}a custom level.");
-            SubtitleContainer container = null;
+            SubtitleContainer container = Plugin.SelectedLevelSubtitles;
             List<Subtitle> subtitles = new List<Subtitle>();
-            if (customLevel != null && LyricsFetcher.TryGetLocalLyrics(customLevel.customLevelPath, out container))
+            string sourceName = null;
+            LyricSource lyricSource = LyricSource.None;
+
+            if (container != null || (customLevel != null && LyricsFetcher.TryGetLocalLyrics(customLevel.customLevelPath, out container)))
             {
                 Plugin.log?.Info("Found local lyrics.");
                 Plugin.log?.Info($"These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");
@@ -88,7 +91,11 @@ namespace BeatSinger
                 yield return StartCoroutine(LyricsFetcher.GetOnlineLyrics(level, subtitles));
 
                 if (subtitles.Count != 0)
+                {
+                    sourceName = "beatsinger.herokuapp.com";
+                    lyricSource = LyricSource.Online_BeatSinger;
                     goto FoundOnlineLyrics;
+                }
 
                 if (!string.IsNullOrEmpty(level.songAuthorName))
                     yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles));
@@ -96,21 +103,29 @@ namespace BeatSinger
                     Plugin.log?.Debug($"Song has no artist name.");
 
                 if (subtitles.Count != 0)
+                {
+                    sourceName = "MusixMatch";
+                    lyricSource = LyricSource.Online_MusixMatch;
                     goto FoundOnlineLyrics;
+                }
                 if (!string.IsNullOrEmpty(level.songSubName))
                     yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songSubName, subtitles));
                 else
                     Plugin.log?.Debug($"Song has no subname.");
 
                 if (subtitles.Count != 0)
+                {
+                    sourceName = "MusixMatch";
+                    lyricSource = LyricSource.Online_MusixMatch;
                     goto FoundOnlineLyrics;
+                }
 
                 yield break;
 
             FoundOnlineLyrics:
                 SpawnText("Lyrics found online", 3f);
                 string songDir = customLevel?.customLevelPath;
-                container = new SubtitleContainer(subtitles);
+                container = new SubtitleContainer(subtitles) { Source = sourceName, SourceType = lyricSource };
                 if (Plugin.config.SaveFetchedLyrics)
                 {
                     if (!string.IsNullOrEmpty(songDir))

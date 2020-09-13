@@ -8,14 +8,28 @@ namespace BeatSinger.Helpers
 {
     using SimpleJSON;
     using System.Collections;
-
+    public enum LyricSource
+    {
+        None = 0,
+        File_SRT = 1,
+        File_JSON = 2,
+        Online_BeatSinger = 3,
+        Online_MusixMatch = 4
+    }
     /// <summary>
     ///   Container for subtitles.
     /// </summary>
     public sealed class SubtitleContainer : IEnumerable<Subtitle>
     {
         public static SubtitleContainer Empty => new SubtitleContainer();
-
+        /// <summary>
+        /// Source name. (Filename if local).
+        /// </summary>
+        public string Source { get; set; }
+        /// <summary>
+        /// Type of source.
+        /// </summary>
+        public LyricSource SourceType { get; set; }
         /// <summary>
         /// Amount of time to offset subtitle entries by.
         /// </summary>

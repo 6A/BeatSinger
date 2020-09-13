@@ -1,0 +1,9 @@
+﻿<modifier-container xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <settings-container>
+    <bool-setting text='Enabled' value='Enabled' apply-on-change='true'/>
+    <slider-setting text='Time Offset' value='TimeOffset' interactable='~ConfigEnabled' 
+                    bind-value='true' apply-on-change='true' min='-20' max='20' increment='0.5' />
+    <slider-setting text='Time Scale' value='TimeScale' interactable='~ConfigEnabled' 
+                    bind-value='true' apply-on-change='true' min='1' max='200' increment='1' />
+  </settings-container>
+</modifier-container>
