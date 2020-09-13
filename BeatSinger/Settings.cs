@@ -1,51 +1,55 @@
 ﻿using System;
-using System.Collections.Generic;
-using IllusionPlugin;
+using BS_Utils.Utilities;
 using UnityEngine.XR;
 
 namespace BeatSinger
 {
     public static class Settings
     {
-        public const string PrefsSection = "BeatSinger";
+        public static Config Instance;
+
+        public const string ModName = "BeatSinger";
 
         public static bool DisplayLyrics { get; set; }
         public static int  ToggleKeyCode { get; set; }
         public static float DisplayDelay { get; set; }
         public static float HideDelay    { get; set; }
+        public static bool SaveFetchedLyrics { get; set; }
         public static bool VerboseLogging { get; set; }
 
         public static void Save()
         {
-            ModPrefs.SetBool (PrefsSection, "Enabled"            , DisplayLyrics);
-            ModPrefs.SetInt  (PrefsSection, nameof(ToggleKeyCode), ToggleKeyCode);
-            ModPrefs.SetFloat(PrefsSection, nameof(DisplayDelay) , DisplayDelay);
-            ModPrefs.SetFloat(PrefsSection, nameof(HideDelay)    , HideDelay);
+            Instance.SetBool (ModName, "Enabled"                , DisplayLyrics);
+            Instance.SetInt  (ModName, nameof(ToggleKeyCode)    , ToggleKeyCode);
+            Instance.SetFloat(ModName, nameof(DisplayDelay)     , DisplayDelay);
+            Instance.SetFloat(ModName, nameof(HideDelay)        , HideDelay);
+            Instance.SetBool (ModName, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
 
             if (VerboseLogging)
-                ModPrefs.SetBool(PrefsSection, nameof(VerboseLogging), true);
+                Instance.SetBool(ModName, nameof(VerboseLogging), true);
         }
 
         public static void Load()
         {
+            if (Instance == null)
+                Instance = new Config(ModName);
             int defaultKeycode;
-            List<InputDevice> inputDevices = new List<InputDevice>();
-            InputDevices.GetDevices(inputDevices);
-
-            if (inputDevices.Exists(x => x.name.IndexOf("rift", StringComparison.InvariantCultureIgnoreCase) != -1))
+            
+            if (XRDevice.model.IndexOf("rift", StringComparison.InvariantCultureIgnoreCase) != -1)
                 defaultKeycode = (int)ConInput.Oculus.LeftThumbstickPress;
-            else if (inputDevices.Exists(x => x.name.IndexOf("vive", StringComparison.InvariantCultureIgnoreCase) != -1))
+            else if (XRDevice.model.IndexOf("vive", StringComparison.InvariantCultureIgnoreCase) != -1)
                 defaultKeycode = (int)ConInput.Vive.LeftTrackpadPress;
             else
                 defaultKeycode = (int)ConInput.WinMR.LeftThumbstickPress;
 
-            DisplayLyrics = ModPrefs.GetBool(PrefsSection, "Enabled"            , true);
-            ToggleKeyCode = ModPrefs.GetInt (PrefsSection, nameof(ToggleKeyCode), defaultKeycode);
+            DisplayLyrics = Instance.GetBool(ModName, "Enabled"            , true);
+            ToggleKeyCode = Instance.GetInt (ModName, nameof(ToggleKeyCode), defaultKeycode);
 
-            DisplayDelay = ModPrefs.GetFloat(PrefsSection, nameof(DisplayDelay), -.1f);
-            HideDelay    = ModPrefs.GetFloat(PrefsSection, nameof(HideDelay)   , 0f);
+            DisplayDelay      = Instance.GetFloat(ModName, nameof(DisplayDelay)     , -.1f);
+            HideDelay         = Instance.GetFloat(ModName, nameof(HideDelay)        , 0f);
+            SaveFetchedLyrics = Instance.GetBool (ModName, nameof(SaveFetchedLyrics), false);
 
-            VerboseLogging = ModPrefs.GetBool(PrefsSection, nameof(VerboseLogging), false);
+            VerboseLogging = Instance.GetBool(ModName, nameof(VerboseLogging), false);
         }
     }
 }

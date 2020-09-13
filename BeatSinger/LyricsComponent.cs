@@ -1,9 +1,15 @@
+using BeatSinger.Helpers;
+using IPA.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
+using Zenject;
 
 namespace BeatSinger
 {
@@ -14,17 +20,18 @@ namespace BeatSinger
     {
         private const BindingFlags NON_PUBLIC_INSTANCE = BindingFlags.NonPublic | BindingFlags.Instance;
 
-        private static readonly FieldInfo AudioTimeSyncField
-            = typeof(GameSongController).GetField("_audioTimeSyncController", NON_PUBLIC_INSTANCE);
+        private static readonly FieldAccessor<GameSongController, AudioTimeSyncController>.Accessor Access_AudioTimeSync
+            = FieldAccessor<GameSongController, AudioTimeSyncController>.GetAccessor("_audioTimeSyncController");
 
-        private static readonly FieldInfo SceneSetupDataField
-            = typeof(GameplayCoreSceneSetupData).GetField("_sceneSetupData", NON_PUBLIC_INSTANCE);
+        private static readonly FieldAccessor<GameplayCoreSceneSetup, GameplayCoreSceneSetupData>.Accessor Access_SceneSetupData
+            = FieldAccessor<GameplayCoreSceneSetup, GameplayCoreSceneSetupData>.GetAccessor("_sceneSetupData");
 
-        private static readonly FieldInfo ContainerField
-            = typeof(Zenject.MonoInstallerBase).GetField("<Container>k__BackingField", NON_PUBLIC_INSTANCE);
 
-        private static readonly FieldInfo FlyingTextEffectPoolField
-            = typeof(FlyingTextSpawner).GetField("_flyingTextEffectPool", NON_PUBLIC_INSTANCE);
+        private static readonly FieldAccessor<MonoInstallerBase, DiContainer>.Accessor Access_DiContainer
+            = FieldAccessor<MonoInstallerBase, DiContainer>.GetAccessor("<Container>k__BackingField");
+
+        private static readonly FieldAccessor<FlyingTextSpawner, FlyingTextEffect.Pool>.Accessor Access_FlyingTextEffectPool
+            = FieldAccessor<FlyingTextSpawner, FlyingTextEffect.Pool>.GetAccessor("_flyingTextEffectPool");
 
         private static readonly Func<FlyingTextSpawner, float> GetTextSpawnerDuration;
         private static readonly Action<FlyingTextSpawner, float> SetTextSpawnerDuration;
@@ -75,49 +82,54 @@ namespace BeatSinger
 
             if (Settings.VerboseLogging)
             {
-                Debug.Log( "[Beat Singer] Attached to scene.");
-                Debug.Log($"[Beat Singer] Lyrics are enabled: {Settings.DisplayLyrics}.");
+                Plugin.log?.Debug("Attached to scene.");
+                Plugin.log?.Info($"Lyrics are {(Settings.DisplayLyrics ? "enabled" : "disabled")}.");
             }
 
             textSpawner = FindObjectOfType<FlyingTextSpawner>();
             songController = FindObjectOfType<GameSongController>();
 
             var sceneSetup = FindObjectOfType<GameplayCoreSceneSetup>();
-
             if (songController == null || sceneSetup == null)
                 yield break;
 
             if (textSpawner == null)
             {
-                var installer = FindObjectOfType<EffectPoolsInstaller>();
-                var container = (Zenject.DiContainer)ContainerField.GetValue(installer);
+                var installer = sceneSetup as MonoInstallerBase;
+                var container = Access_DiContainer(ref installer);
 
                 textSpawner = container.InstantiateComponentOnNewGameObject<FlyingTextSpawner>();
             }
 
-            var sceneSetupData = (GameplayCoreSceneSetupData)SceneSetupDataField.GetValue(sceneSetup);
+            var sceneSetupData = Access_SceneSetupData(ref sceneSetup);
+            //(GameplayCoreSceneSetupData)SceneSetupDataField.GetValue(sceneSetup);
 
             if (sceneSetupData == null)
                 yield break;
 
-            audio = (AudioTimeSyncController)AudioTimeSyncField.GetValue(songController);
+            audio = Access_AudioTimeSync(ref songController);
+            //(AudioTimeSyncController)AudioTimeSyncField.GetValue(songController);
 
             IBeatmapLevel level = sceneSetupData.difficultyBeatmap.level;
             List<Subtitle> subtitles = new List<Subtitle>();
 
-            Debug.Log($"[Beat Singer] Corresponding song data found: {level.songName} by {level.songAuthorName} ({(level.songSubName != null ? level.songSubName : "No sub-name")}).");
+            Plugin.log?.Info($"Corresponding song data found: {level.songName} by {level.songAuthorName} ({(level.songSubName != null ? level.songSubName : "No sub-name")}).");
 
-            if (LyricsFetcher.GetLocalLyrics(sceneSetupData.difficultyBeatmap.level.levelID, subtitles))
+
+            CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
+            if (Settings.VerboseLogging)
+                Plugin.log?.Debug($"{level.songName} is {(customLevel != null ? "" : "not ")}a custom level.");
+            if (customLevel != null && LyricsFetcher.GetLocalLyrics(customLevel.customLevelPath, subtitles))
             {
-                Debug.Log( "[Beat Singer] Found local lyrics.");
-                Debug.Log($"[Beat Singer] These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");
+                Plugin.log?.Info("Found local lyrics.");
+                Plugin.log?.Info($"These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");
 
                 // Lyrics found locally, continue with them.
                 SpawnText("Lyrics found locally", 3f);
             }
             else
             {
-                Debug.Log("[Beat Singer] Did not find local lyrics, trying online lyrics...");
+                Plugin.log?.Debug("Did not find local lyrics, trying online lyrics...");
 
                 // When this coroutine ends, it will call the given callback with a list
                 // of all the subtitles we found, and allow us to react.
@@ -127,20 +139,53 @@ namespace BeatSinger
                 if (subtitles.Count != 0)
                     goto FoundOnlineLyrics;
 
-                yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles));
+                if (!string.IsNullOrEmpty(level.songAuthorName))
+                    yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles));
+                else
+                    Plugin.log?.Debug($"Song has no artist name.");
 
                 if (subtitles.Count != 0)
                     goto FoundOnlineLyrics;
-
-                yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songSubName, subtitles));
+                if (!string.IsNullOrEmpty(level.songSubName))
+                    yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songSubName, subtitles));
+                else
+                    Plugin.log?.Debug($"Song has no subname.");
 
                 if (subtitles.Count != 0)
                     goto FoundOnlineLyrics;
 
                 yield break;
 
-                FoundOnlineLyrics:
+            FoundOnlineLyrics:
                 SpawnText("Lyrics found online", 3f);
+                string songDir = customLevel?.customLevelPath;
+                if (Settings.SaveFetchedLyrics)
+                {
+                    if (!string.IsNullOrEmpty(songDir))
+                    {
+                        Task.Run(() =>
+                        {
+                            string lyricsPath = Path.Combine(songDir, "lyrics.json");
+                            try
+                            {
+                                if (!File.Exists(lyricsPath))
+                                {
+                                    File.WriteAllText(lyricsPath, subtitles.ToJsonArray().ToString());
+                                    Plugin.log?.Info($"Saved fetched lyrics to '{lyricsPath}'");
+                                }
+                                else
+                                    Plugin.log?.Warn($"Unable to save lyrics, file already exists: '{lyricsPath}'");
+                            }
+                            catch (Exception e)
+                            {
+                                Plugin.log?.Error($"Error saving fetched lyrics to '{lyricsPath}': {e.Message}");
+                                Plugin.log?.Debug(e);
+                            }
+                        });
+                    }
+                    else
+                        Plugin.log?.Warn($"Unable save lyrics, song directory couldn't be determined.");
+                }
             }
 
             StartCoroutine(DisplayLyrics(subtitles));
@@ -178,7 +223,7 @@ namespace BeatSinger
             }
 
             if (Settings.VerboseLogging && i > 0)
-                Debug.Log($"[Beat Singer] Skipped {i} lyrics because they started too soon.");
+                Plugin.log?.Debug($"Skipped {i} lyrics because they started too soon.");
 
             // Display all lyrics
             while (i < subtitles.Count)
@@ -208,7 +253,7 @@ namespace BeatSinger
                 }
 
                 if (Settings.VerboseLogging)
-                    Debug.Log($"[Beat Singer] At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
+                    Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 
                 SpawnText(subtitle.Text, displayDuration + Settings.HideDelay);
             }
@@ -223,7 +268,7 @@ namespace BeatSinger
             float initialDuration = GetTextSpawnerDuration(textSpawner);
 
             SetTextSpawnerDuration(textSpawner, duration);
-            textSpawner.SpawnText(new Vector3(0, 4, 0), Quaternion.identity, Quaternion.identity, text);
+            textSpawner.SpawnText(new Vector3(0, 4, 0), Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
             SetTextSpawnerDuration(textSpawner, initialDuration);
         }
     }

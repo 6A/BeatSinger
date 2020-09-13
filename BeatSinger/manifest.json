@@ -1,0 +1,15 @@
+﻿{
+  "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
+  "id": "BeatSinger",
+  "name": "BeatSinger",
+  "author": "Grégoire Geis",
+  "version": "1.1.0",
+  "description": "Displays song lyrics in-game.",
+  "gameVersion": "1.11.1",
+  "dependsOn": {
+    "BSIPA": "^4.0.5",
+    "SongCore": "^2.9.11",
+    "BS Utils": "^1.4.11"
+  },
+  "features": []
+}

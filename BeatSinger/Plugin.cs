@@ -1,4 +1,5 @@
-using IllusionPlugin;
+using IPA;
+using IPALogger = IPA.Logging.Logger;
 using UnityEngine.SceneManagement;
 
 namespace BeatSinger
@@ -6,47 +7,47 @@ namespace BeatSinger
     /// <summary>
     ///   Entry point of the plugin.
     /// </summary>
-    public sealed class Plugin : IPlugin
+    [Plugin(RuntimeOptions.DynamicInit)]
+    public sealed class Plugin
     {
         public string Name => "Beat Singer";
-        public string Version => "1.11.1.0";
+        public string Version => "1.1.0.0";
+        internal static IPALogger log;
 
-        public void OnApplicationStart()
+        [Init]
+        public void Init(IPALogger logger)
         {
+            log = logger;
             Settings.Load();
-
-            SceneManager.activeSceneChanged += OnActiveSceneChanged;
+            if (Settings.VerboseLogging)
+                log.Debug($"VerboseLogging enabled.");
         }
 
+        [OnEnable]
+        public void OnEnabled()
+        {
+            BS_Utils.Utilities.BSEvents.gameSceneActive -= OnGameSceneActive;
+            BS_Utils.Utilities.BSEvents.gameSceneActive += OnGameSceneActive;
+        }
+
+        [OnDisable]
+        public void OnDisabled()
+        {
+            BS_Utils.Utilities.BSEvents.gameSceneActive -= OnGameSceneActive;
+        }
+
+        [OnExit]
         public void OnApplicationQuit()
         {
             Settings.Save();
-
-            SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         }
 
-        #region Unused
-        public void OnLevelWasInitialized(int level)
-        {
-        }
 
-        public void OnLevelWasLoaded(int level)
-        {
-        }
 
-        public void OnUpdate()
+        private void OnGameSceneActive()
         {
-        }
-
-        public void OnFixedUpdate()
-        {
-        }
-        #endregion
-
-        public void OnActiveSceneChanged(Scene _, Scene newScene)
-        {
-            if (newScene.name == "GameCore")
-                newScene.GetRootGameObjects()[0].AddComponent<LyricsComponent>();
+            Scene gameScene = SceneManager.GetActiveScene();
+            gameScene.GetRootGameObjects()[0].AddComponent<LyricsComponent>();
         }
     }
 }

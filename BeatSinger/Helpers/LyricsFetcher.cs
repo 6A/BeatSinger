@@ -12,6 +12,7 @@ using UnityEngine.Networking;
 
 namespace BeatSinger
 {
+    using BeatSinger.Helpers;
     using SimpleJSON;
 
     /// <summary>
@@ -19,8 +20,8 @@ namespace BeatSinger
     /// </summary>
     public sealed class Subtitle
     {
-        public string Text    { get; }
-        public float  Time    { get; }
+        public string Text { get; }
+        public float Time { get; }
         public float? EndTime { get; }
 
         public Subtitle(JSONNode node)
@@ -141,9 +142,9 @@ namespace BeatSinger
                 }
             }
 
-            Invalid:
+        Invalid:
 
-            Debug.Log("[Beat Singer] Invalid subtiles file found, cancelling load...");
+            Plugin.log?.Warn("Invalid subtiles file found, cancelling load...");
             subtitles.Clear();
         }
 
@@ -151,11 +152,10 @@ namespace BeatSinger
         ///   Fetches the lyrics of the given song on the local file system and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static bool GetLocalLyrics(string songId, List<Subtitle> subtitles)
+        public static bool GetLocalLyrics(string songDirectory, List<Subtitle> subtitles)
         {
-            string songDirectory = Loader.CustomLevels.Values.FirstOrDefault(x => x.levelID == songId)?.customLevelPath;
 
-            Debug.Log($"[Beat Singer] Song directory: {songDirectory}.");
+            Plugin.log?.Debug($"Song directory: {songDirectory}.");
 
             if (songDirectory == null)
                 return false;
@@ -201,7 +201,7 @@ namespace BeatSinger
 
             if (req.isNetworkError || req.isHttpError)
             {
-                Debug.Log(req.error);
+                Plugin.log?.Warn($"Error getting lyrics from 'beatsinger.herokuapp.com': { req.error}");
             }
             else if (req.responseCode == 200)
             {
@@ -220,7 +220,8 @@ namespace BeatSinger
                 }
                 catch (Exception e)
                 {
-                    Debug.LogException(e);
+                    Plugin.log?.Error($"Error parsing lyrics response: {e.Message}");
+                    Plugin.log?.Debug(e);
                 }
             }
 
@@ -234,16 +235,17 @@ namespace BeatSinger
         public static IEnumerator GetMusixmatchLyrics(string song, string artist, List<Subtitle> subtitles)
         {
             // Perform request
-            string qTrack  = UnityWebRequest.EscapeURL(song);
+            string qTrack = UnityWebRequest.EscapeURL(song);
             string qArtist = UnityWebRequest.EscapeURL(artist);
 
             string url = "https://apic-desktop.musixmatch.com/ws/1.1/macro.subtitles.get"
-                       +$"?format=json&q_track={qTrack}&q_artist={qArtist}&user_language=en"
+                       + $"?format=json&q_track={qTrack}&q_artist={qArtist}&user_language=en"
                        + "&userblob_id=aG9va2VkIG9uIGEgZmVlbGluZ19ibHVlIHN3ZWRlXzE3Mg"
                        + "&subtitle_format=mxm&app_id=web-desktop-app-v1.0"
                        + "&usertoken=180220daeb2405592f296c4aea0f6d15e90e08222b559182bacf92";
 
-
+            if (Settings.VerboseLogging)
+                Plugin.log?.Debug($"Requesting lyrics from '{url}'");
             UnityWebRequest req = UnityWebRequest.Get(url);
 
             req.SetRequestHeader("Cookie", "x-mxm-token-guid=cd25ed55-85ea-445b-83cd-c4b173e20ce7");
@@ -252,39 +254,77 @@ namespace BeatSinger
 
             if (req.isNetworkError || req.isHttpError)
             {
-                Debug.Log(req.error);
+                Plugin.log?.Error($"Network error getting lyrics from MusixMatch: {req.error}");
             }
             else
             {
                 // Request done, process result
                 try
                 {
-                    JSONNode res = JSON.Parse(req.downloadHandler.text);
-                    JSONNode subtitleObject = res["message"]["body"]["macro_calls"]["track.subtitles.get"]
-                                                 ["message"]["body"]["subtitle_list"]
-                                                 .AsArray[0]["subtitle"];
 
-                    JSONArray subtitlesArray = JSON.Parse(subtitleObject["subtitle_body"].Value).AsArray;
-
-                    // No need to sort subtitles here, it should already be done.
-                    subtitles.Capacity = subtitlesArray.Count;
-
-                    foreach (JSONNode node in subtitlesArray)
+                    JSONArray subtitlesArray = ParseMusixMatchResponse(req.downloadHandler.text);
+                    if (subtitlesArray != null)
                     {
-                        subtitles.Add(new Subtitle(node));
+                        // No need to sort subtitles here, it should already be done.
+                        subtitles.Capacity = subtitlesArray.Count;
+
+                        foreach (JSONNode node in subtitlesArray)
+                        {
+                            subtitles.Add(new Subtitle(node));
+                        }
                     }
                 }
-                catch (NullReferenceException)
+                catch (NullReferenceException e)
                 {
                     // JSON key not found.
+                    Plugin.log?.Error($"Error parsing MusixMatch lyrics json response. Response is missing an expected key.");
+                    Plugin.log?.Debug(e);
+                    if (Settings.VerboseLogging)
+                    {
+                        Plugin.log?.Debug(req.downloadHandler.text);
+                    }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogException(e);
+                    Plugin.log?.Error($"Error parsing MusixMatch lyrics json response: {e.Message}");
+                    Plugin.log?.Debug(e);
                 }
             }
 
             req.Dispose();
+        }
+
+        public static JSONArray ParseMusixMatchResponse(string jsonResponse)
+        {
+            JSONNode res = JSON.Parse(jsonResponse);
+            MusixMatchStatus status = (MusixMatchStatus)res["message"]["header"]["status_code"].AsInt;
+            if (status != MusixMatchStatus.Success)
+            {
+                Plugin.log?.Error($"Error getting lyrics from MusixMatch: {status.GetReasonString()}");
+                return null;
+            }
+            JSONNode lyricResponse = res["message"]["body"]["macro_calls"]["track.subtitles.get"]["message"];
+            MusixMatchStatus lyricResponseStatus = (MusixMatchStatus)lyricResponse["header"]["status_code"].AsInt;
+            if (Settings.VerboseLogging)
+                Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}'.");
+
+            switch (lyricResponseStatus)
+            {
+                case MusixMatchStatus.NotFound:
+                    Plugin.log?.Info($"Lyrics not found on MusixMatch.");
+                    return null;
+                default:
+                    if (Settings.VerboseLogging)
+                        Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}': {lyricResponseStatus.GetReasonString()}");
+                    break;
+            }
+            JSONNode subtitleObject = lyricResponse["body"]["subtitle_list"]
+                                         .AsArray[0]["subtitle"];
+
+            JSONArray subtitlesArray = JSON.Parse(subtitleObject["subtitle_body"].Value).AsArray;
+            if (subtitlesArray == null)
+                Plugin.log?.Warn($"MusixMatch does not have lyrics for this song.");
+            return subtitlesArray;
         }
 
         /// <summary>
@@ -296,5 +336,53 @@ namespace BeatSinger
 
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(id));
         }
+    }
+
+    /// <summary>
+    /// Status codes that MusixMatch may respond with in the header.
+    /// https://developer.musixmatch.com/documentation/status-codes
+    /// </summary>
+    public enum MusixMatchStatus
+    {
+        /// <summary>
+        /// No status
+        /// </summary>
+        None = 0,
+        /// <summary>
+        /// The request was successful.
+        /// </summary>
+        Success = 200,
+        /// <summary>
+        /// The request had bad syntax or was inherently impossible to be satisfied.
+        /// </summary>
+        BadRequest = 400,
+        /// <summary>
+        /// Authentication failed, probably because of invalid/missing API key.
+        /// </summary>
+        Unauthorized = 401,
+        /// <summary>
+        /// The usage limit has been reached, either you exceeded per day requests limits or your balance is insufficient.
+        /// </summary>
+        UsageLimitReached = 402,
+        /// <summary>
+        /// You are not authorized to perform this operation.
+        /// </summary>
+        Forbidden = 403,
+        /// <summary>
+        /// The requested resource was not found.
+        /// </summary>
+        NotFound = 404,
+        /// <summary>
+        /// The requested method was not found.
+        /// </summary>
+        MethodNotFound = 405,
+        /// <summary>
+        /// Ops. Something were wrong.
+        /// </summary>
+        GeneralFailure = 500,
+        /// <summary>
+        /// Our system is a bit busy at the moment and your request can’t be satisfied.
+        /// </summary>
+        ServiceUnavailable = 503
     }
 }
