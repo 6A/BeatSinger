@@ -96,22 +96,19 @@ namespace BeatSinger
             if (textSpawner == null)
             {
                 var installer = sceneSetup as MonoInstallerBase;
-                var container = Access_DiContainer(ref installer);
+                var diContainer = Access_DiContainer(ref installer);
 
-                textSpawner = container.InstantiateComponentOnNewGameObject<FlyingTextSpawner>();
+                textSpawner = diContainer.InstantiateComponentOnNewGameObject<FlyingTextSpawner>();
             }
 
             var sceneSetupData = Access_SceneSetupData(ref sceneSetup);
-            //(GameplayCoreSceneSetupData)SceneSetupDataField.GetValue(sceneSetup);
 
             if (sceneSetupData == null)
                 yield break;
 
             audio = Access_AudioTimeSync(ref songController);
-            //(AudioTimeSyncController)AudioTimeSyncField.GetValue(songController);
 
             IBeatmapLevel level = sceneSetupData.difficultyBeatmap.level;
-            List<Subtitle> subtitles = new List<Subtitle>();
 
             Plugin.log?.Info($"Corresponding song data found: {level.songName} by {level.songAuthorName} ({(level.songSubName != null ? level.songSubName : "No sub-name")}).");
 
@@ -119,7 +116,9 @@ namespace BeatSinger
             CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
             if (Settings.VerboseLogging)
                 Plugin.log?.Debug($"{level.songName} is {(customLevel != null ? "" : "not ")}a custom level.");
-            if (customLevel != null && LyricsFetcher.GetLocalLyrics(customLevel.customLevelPath, subtitles))
+            SubtitleContainer container = null;
+            List<Subtitle> subtitles = new List<Subtitle>();
+            if (customLevel != null && LyricsFetcher.TryGetLocalLyrics(customLevel.customLevelPath, out container))
             {
                 Plugin.log?.Info("Found local lyrics.");
                 Plugin.log?.Info($"These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");
@@ -159,6 +158,7 @@ namespace BeatSinger
             FoundOnlineLyrics:
                 SpawnText("Lyrics found online", 3f);
                 string songDir = customLevel?.customLevelPath;
+                container = new SubtitleContainer(subtitles);
                 if (Settings.SaveFetchedLyrics)
                 {
                     if (!string.IsNullOrEmpty(songDir))
@@ -170,7 +170,7 @@ namespace BeatSinger
                             {
                                 if (!File.Exists(lyricsPath))
                                 {
-                                    File.WriteAllText(lyricsPath, subtitles.ToJsonArray().ToString());
+                                    File.WriteAllText(lyricsPath, container.ToJson().ToString(3));
                                     Plugin.log?.Info($"Saved fetched lyrics to '{lyricsPath}'");
                                 }
                                 else
@@ -188,7 +188,7 @@ namespace BeatSinger
                 }
             }
 
-            StartCoroutine(DisplayLyrics(subtitles));
+            StartCoroutine(DisplayLyrics(container));
         }
 
         public void Update()
@@ -201,57 +201,44 @@ namespace BeatSinger
             SpawnText(Settings.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
         }
 
-        private IEnumerator DisplayLyrics(IList<Subtitle> subtitles)
+        private IEnumerator DisplayLyrics(SubtitleContainer subtitles)
         {
+            if (subtitles == null)
+                yield break;
+            if (subtitles.Count == 0)
+            {
+                Plugin.log?.Info("No subtitles to display for this song.");
+                yield break;
+            }
+            int skipped = 0;
+            if (Settings.VerboseLogging)
+                Plugin.log?.Debug($"{subtitles.Count} lyrics found for song. Displaying with offset {subtitles.TimeOffset}s and a scale of {subtitles.TimeScale:P}");
             // Subtitles are sorted by time of appearance, so we can iterate without sorting first.
-            int i = 0;
-
-            // First, skip all subtitles that have already been seen.
+            foreach (var subtitle in subtitles)
             {
                 float currentTime = audio.songTime;
-
-                while (i < subtitles.Count)
+                float subtitleTime = subtitle.Time + Settings.DisplayDelay;
+                // First, skip all subtitles that have already been seen.
+                if (currentTime > subtitleTime)
                 {
-                    Subtitle subtitle = subtitles[i];
-
-                    if (subtitle.Time >= currentTime)
-                        // Subtitle appears after current moment, stop skipping
-                        break;
-
-                    i++;
+                    skipped++;
+                    continue;
                 }
-            }
+                if (skipped > 0)
+                {
+                    if (Settings.VerboseLogging)
+                        Plugin.log?.Debug($"Skipped {skipped} lyrics because they started too soon.");
+                    skipped = 0;
+                }
 
-            if (Settings.VerboseLogging && i > 0)
-                Plugin.log?.Debug($"Skipped {i} lyrics because they started too soon.");
-
-            // Display all lyrics
-            while (i < subtitles.Count)
-            {
                 // Wait for time to display next lyrics
-                yield return new WaitForSeconds(subtitles[i++].Time - audio.songTime + Settings.DisplayDelay);
-
+                yield return new WaitForSeconds(subtitleTime - currentTime);
                 if (!Settings.DisplayLyrics)
                     // Don't display lyrics this time
                     continue;
 
-                // We good, display lyrics
-                Subtitle subtitle = subtitles[i - 1];
-
-                float displayDuration,
-                      currentTime = audio.songTime;
-
-                if (subtitle.EndTime.HasValue)
-                {
-                    displayDuration = subtitle.EndTime.Value - currentTime;
-                }
-                else
-                {
-                    displayDuration = i == subtitles.Count
-                                    ? audio.songLength - currentTime
-                                    : subtitles[i].Time - currentTime;
-                }
-
+                currentTime = audio.songTime;
+                float displayDuration = (subtitle.EndTime ?? audio.songEndTime) - currentTime;
                 if (Settings.VerboseLogging)
                     Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 

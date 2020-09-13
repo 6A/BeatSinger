@@ -52,5 +52,14 @@ namespace BeatSinger.Helpers
             }
             return array;
         }
+        public static JSONObject ToJson(this SubtitleContainer subtitles)
+        {
+            JSONObject jObject = new JSONObject();
+            jObject["timeOffset"] = subtitles.TimeOffset;
+            jObject["timeScale"] = subtitles.TimeScale;
+            JSONArray array = subtitles.Subtitles.ToJsonArray();
+            jObject["subtitles"] = array;
+            return jObject;
+        }
     }
 }

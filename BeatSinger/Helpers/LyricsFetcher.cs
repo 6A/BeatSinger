@@ -16,61 +16,56 @@ namespace BeatSinger
     using SimpleJSON;
 
     /// <summary>
-    ///   Defines a subtitle.
-    /// </summary>
-    public sealed class Subtitle
-    {
-        public string Text { get; }
-        public float Time { get; }
-        public float? EndTime { get; }
-
-        public Subtitle(JSONNode node)
-        {
-            JSONNode time = node["time"];
-
-            if (time == null)
-                throw new Exception("Subtitle did not have a 'time' property.");
-
-            Text = node["text"];
-
-            if (time.IsNumber)
-            {
-                Time = time;
-
-                if (node["end"])
-                    EndTime = node["end"];
-            }
-            else
-            {
-                Time = time["total"];
-            }
-        }
-
-        public Subtitle(string text, float time, float end)
-        {
-            Text = text;
-            Time = time;
-            EndTime = end;
-        }
-    }
-
-    /// <summary>
     ///   Provides utilities for asynchronously fetching lyrics.
     /// </summary>
     public static class LyricsFetcher
     {
-        private static void PopulateFromJson(string json, List<Subtitle> subtitles)
+        private static void PopulateFromJson(string jsonString, List<Subtitle> subtitles)
         {
-            JSONArray subtitlesArray = JSON.Parse(json).AsArray;
+            JSONNode json = JSON.Parse(jsonString);
+            JSONArray subtitlesArray;
+            if (json.IsArray)
+                subtitlesArray = json.AsArray;
+            else
+                subtitlesArray = json["subtitles"].AsArray;
+            PopulateFromJson(subtitlesArray, subtitles);
+        }
+        private static void PopulateFromJson(JSONArray jAry, List<Subtitle> subtitles)
+        {
+            subtitles.Capacity = jAry.Count;
 
-            subtitles.Capacity = subtitlesArray.Count;
-
-            foreach (JSONNode node in subtitlesArray)
+            foreach (JSONNode node in jAry)
             {
                 subtitles.Add(new Subtitle(node));
             }
         }
 
+        private static void PopulateFromJson(string jsonString, SubtitleContainer container)
+        {
+            JSONNode json = JSON.Parse(jsonString);
+            JSONArray subtitlesArray;
+            float timeScale = 1;
+            if (json.IsArray)
+                subtitlesArray = json.AsArray;
+            else
+            {
+                container.TimeOffset = json["timeOffset"].AsFloat;
+                timeScale = json["timeScale"].AsFloat;
+                subtitlesArray = json["subtitles"].AsArray;
+                if (timeScale > 0)
+                    container.TimeScale = timeScale;
+            }
+            List<Subtitle> subtitles = new List<Subtitle>(subtitlesArray.Count);
+            PopulateFromJson(subtitlesArray, subtitles);
+
+            container.SetSubtitles(subtitles);
+        }
+
+        /// <summary>
+        ///   Creates a <see cref="SubtitleContainer"/> from an SRT file. Return null if unsuccessful.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
         private static void PopulateFromSrt(TextReader reader, List<Subtitle> subtitles)
         {
             // Parse using a simple state machine:
@@ -78,14 +73,14 @@ namespace BeatSinger
             //   1: Parsing start / end time
             //   2: Parsing text
             byte state = 0;
-
+            bool invalid = false;
             float startTime = 0f,
                   endTime = 0f;
 
             StringBuilder text = new StringBuilder();
             string line;
 
-            while ((line = reader.ReadLine()) != null)
+            while ((line = reader.ReadLine()) != null && !invalid)
             {
                 switch (state)
                 {
@@ -95,7 +90,10 @@ namespace BeatSinger
                             continue;
 
                         if (!int.TryParse(line, out int _))
-                            goto Invalid;
+                        {
+                            invalid = true;
+                            break;
+                        }
 
                         // Number found; continue to next state.
                         state = 1;
@@ -105,8 +103,10 @@ namespace BeatSinger
                         Match m = Regex.Match(line, @"(\d+):(\d+):(\d+,\d+) *--> *(\d+):(\d+):(\d+,\d+)");
 
                         if (!m.Success)
-                            goto Invalid;
-
+                        {
+                            invalid = true;
+                            break;
+                        }
                         startTime = int.Parse(m.Groups[1].Value) * 3600
                                   + int.Parse(m.Groups[2].Value) * 60
                                   + float.Parse(m.Groups[3].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture);
@@ -138,25 +138,25 @@ namespace BeatSinger
 
                     default:
                         // Shouldn't happen.
-                        throw new Exception();
+                        throw new Exception($"Invalid syntax in SRT file: '{line}'");
                 }
             }
-
-        Invalid:
-
-            Plugin.log?.Warn("Invalid subtiles file found, cancelling load...");
-            subtitles.Clear();
+            if (invalid)
+            {
+                Plugin.log?.Warn("Invalid subtiles file found, cancelling load...");
+                subtitles.Clear();
+            }
         }
 
         /// <summary>
         ///   Fetches the lyrics of the given song on the local file system and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static bool GetLocalLyrics(string songDirectory, List<Subtitle> subtitles)
+        public static bool TryGetLocalLyrics(string songDirectory, out SubtitleContainer container)
         {
 
             Plugin.log?.Debug($"Song directory: {songDirectory}.");
-
+            container = SubtitleContainer.Empty;
             if (songDirectory == null)
                 return false;
 
@@ -165,9 +165,9 @@ namespace BeatSinger
 
             if (File.Exists(jsonFile))
             {
-                PopulateFromJson(File.ReadAllText(jsonFile), subtitles);
+                PopulateFromJson(File.ReadAllText(jsonFile), container);
 
-                return true;
+                return container.Count > 0;
             }
 
             // Find SRT lyrics
@@ -178,9 +178,11 @@ namespace BeatSinger
                 using (FileStream fs = File.OpenRead(srtFile))
                 using (StreamReader reader = new StreamReader(fs))
                 {
+                    List<Subtitle> subtitles = new List<Subtitle>();
                     PopulateFromSrt(reader, subtitles);
-
-                    return true;
+                    if (subtitles.Count > 0)
+                        container.SetSubtitles(subtitles);
+                    return container.Count > 0;
                 }
 
             }
