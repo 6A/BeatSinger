@@ -42,9 +42,16 @@
   <!--Creates a BeatMods compliant zip file with the release.-->
   <Target Name="ZipRelease" AfterTargets="Build" Condition="'$(DisableZipRelease)' != 'True' AND '$(Configuration)' == 'Release' AND '$(BSMTTaskAssembly)' != ''">
     <Message Text="Zipping '$(ArtifactDestination)' for release." Importance="high" />
+    <PropertyGroup>
+      <DestinationDirectory>$(OutDir)zip\</DestinationDirectory>
+    </PropertyGroup>
+    <ItemGroup>
+      <OldZips Include="$(DestinationDirectory)$(AssemblyName)*.zip"/>
+    </ItemGroup>
     <Copy SourceFiles="$(OutputAssemblyName).dll" DestinationFiles="$(ArtifactDestination)\Mods\$(AssemblyName).dll" />
     <Message Text="PluginVersion: $(PluginVersion), AssemblyVersion: $(AssemblyVersion), GameVersion: $(GameVersion)" Importance="high" />
-    <ZipDir SourceDirectory="$(ArtifactDestination)" DestinationFile="$(OutDir)zip\$(AssemblyName)-$(PluginVersion)-bs$(GameVersion)-$(CommitHash).zip" />
+    <Delete Files="@(OldZips)" TreatErrorsAsWarnings="true" ContinueOnError="true" />
+    <ZipDir SourceDirectory="$(ArtifactDestination)" DestinationFile="$(DestinationDirectory)$(AssemblyName)-$(PluginVersion)-bs$(GameVersion)-$(CommitHash).zip" />
   </Target>
   <!--Copies the assembly and pdb to the Beat Saber folder.-->
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(DisableCopyToPlugins)' != 'True' AND '$(ContinuousIntegrationBuild)' != 'True'">
