@@ -13,14 +13,17 @@ namespace BeatSinger
         public string Name => "Beat Singer";
         public string Version => "1.1.0.0";
         internal static IPALogger log;
+        internal static Settings config;
 
         [Init]
         public void Init(IPALogger logger)
         {
             log = logger;
-            Settings.Load();
-            if (Settings.VerboseLogging)
+            config = new Settings();
+            config.Load();
+            if (config.VerboseLogging)
                 log.Debug($"VerboseLogging enabled.");
+            BeatSaberMarkupLanguage.Settings.BSMLSettings.instance.AddSettingsMenu(Name, "BeatSinger.UI.SettingsView.bsml", config);
         }
 
         [OnEnable]
@@ -39,7 +42,7 @@ namespace BeatSinger
         [OnExit]
         public void OnApplicationQuit()
         {
-            Settings.Save();
+            config.Save();
         }
 
 

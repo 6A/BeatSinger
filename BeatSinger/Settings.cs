@@ -1,28 +1,38 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
+using BeatSaberMarkupLanguage.Attributes;
+using BeatSaberMarkupLanguage.Notify;
 using BS_Utils.Utilities;
 using UnityEngine;
 using UnityEngine.XR;
 
 namespace BeatSinger
 {
-    public static class Settings
+    public class Settings : Config
     {
         public static readonly Color DefaultColor = new Color(0, 190, 255, 255);
-
-        public static Config Instance;
-
+        public event EventHandler SettingsReloaded;
+        private static Vector3 _position;
         public const string ModName = "BeatSinger";
         public const string Section_Mod = "General";
         public const string Section_TextStyle = "Text Style";
 
-        public static bool DisplayLyrics { get; set; }
-        public static int ToggleKeyCode { get; set; }
-        public static float DisplayDelay { get; set; }
-        public static float HideDelay { get; set; }
-        public static bool SaveFetchedLyrics { get; set; }
-        public static bool EnableShake { get; set; }
-        public static float TextSize { get; set; }
-        public static Color TextColor
+        [UIValue(nameof(DisplayLyrics))]
+        public bool DisplayLyrics { get; set; }
+        [UIValue(nameof(ToggleKeyCode))]
+        public int ToggleKeyCode { get; set; }
+        [UIValue(nameof(DisplayDelay))]
+        public  float DisplayDelay { get; set; }
+        [UIValue(nameof(HideDelay))]
+        public  float HideDelay { get; set; }
+        [UIValue(nameof(SaveFetchedLyrics))]
+        public  bool SaveFetchedLyrics { get; set; }
+        [UIValue(nameof(EnableShake))]
+        public  bool EnableShake { get; set; }
+        [UIValue(nameof(TextSize))]
+        public  float TextSize { get; set; }
+        [UIValue(nameof(TextColor))]
+        public  Color TextColor
         {
             get
             {
@@ -47,36 +57,52 @@ namespace BeatSinger
             }
         }
 
-        public static Vector3 Position { get; set; }
+        public  Vector3 Position { get => _position; set => _position = value; }
 
-        public static bool VerboseLogging { get; set; }
+        [UIValue(nameof(PosX))]
+        internal  float PosX { get => _position.x; set => _position.x = value; }
+        [UIValue(nameof(PosY))]
+        internal  float PosY { get => _position.y; set => _position.y = value; }
+        [UIValue(nameof(PosZ))]
+        internal  float PosZ { get => _position.z; set => _position.z = value; }
+
+        [UIValue(nameof(VerboseLogging))]
+        public  bool VerboseLogging { get; set; }
         // RGBA
-        private static readonly int[] ColorAry = new int[] { 0, 190, 255, 255 };
+        private  readonly int[] ColorAry = new int[] { 0, 190, 255, 255 };
 
-        public static void Save()
+        public Settings()
+            : base(ModName)
         {
-            Instance.SetBool(Section_Mod, "Enabled", DisplayLyrics);
-            Instance.SetInt(Section_Mod, nameof(ToggleKeyCode), ToggleKeyCode);
-            Instance.SetFloat(Section_Mod, nameof(DisplayDelay), DisplayDelay);
-            Instance.SetFloat(Section_Mod, nameof(HideDelay), HideDelay);
-            Instance.SetBool(Section_Mod, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
+
+        }
+        [UIAction("#apply")]
+        public void Save()
+        {
             if (VerboseLogging)
-                Instance.SetBool(Section_Mod, nameof(VerboseLogging), true);
-            Instance.SetBool(Section_TextStyle, nameof(EnableShake), EnableShake);
-            Instance.SetFloat(Section_TextStyle, nameof(TextSize), TextSize);
-            Instance.SetInt(Section_TextStyle, "ColorR", (int)(TextColor.r * 255f));
-            Instance.SetInt(Section_TextStyle, "ColorG", (int)(TextColor.g * 255f));
-            Instance.SetInt(Section_TextStyle, "ColorB", (int)(TextColor.b * 255f));
-            Instance.SetInt(Section_TextStyle, "ColorA", (int)(TextColor.a * 255f));
-            Instance.SetFloat(Section_TextStyle, "PosX", Position.x);
-            Instance.SetFloat(Section_TextStyle, "PosY", Position.y);
-            Instance.SetFloat(Section_TextStyle, "PosZ", Position.z);
+                Plugin.log?.Debug($"Saving config.");
+            SetBool(Section_Mod, "Enabled", DisplayLyrics);
+            SetInt(Section_Mod, nameof(ToggleKeyCode), ToggleKeyCode);
+            SetFloat(Section_Mod, nameof(DisplayDelay), DisplayDelay);
+            SetFloat(Section_Mod, nameof(HideDelay), HideDelay);
+            SetBool(Section_Mod, nameof(SaveFetchedLyrics), SaveFetchedLyrics);
+            if (VerboseLogging)
+                SetBool(Section_Mod, nameof(VerboseLogging), true);
+            SetBool(Section_TextStyle, nameof(EnableShake), EnableShake);
+            SetFloat(Section_TextStyle, nameof(TextSize), TextSize);
+            SetInt(Section_TextStyle, "ColorR", (int)(TextColor.r * 255f));
+            SetInt(Section_TextStyle, "ColorG", (int)(TextColor.g * 255f));
+            SetInt(Section_TextStyle, "ColorB", (int)(TextColor.b * 255f));
+            SetInt(Section_TextStyle, "ColorA", (int)(TextColor.a * 255f));
+            SetFloat(Section_TextStyle, "PosX", Position.x);
+            SetFloat(Section_TextStyle, "PosY", Position.y);
+            SetFloat(Section_TextStyle, "PosZ", Position.z);
         }
 
-        public static void Load()
+        public void Load()
         {
-            if (Instance == null)
-                Instance = new Config(ModName);
+            if (VerboseLogging)
+                Plugin.log?.Debug($"Loading config.");
             int defaultKeycode;
 
             if (XRDevice.model.IndexOf("rift", StringComparison.InvariantCultureIgnoreCase) != -1)
@@ -86,25 +112,26 @@ namespace BeatSinger
             else
                 defaultKeycode = (int)ConInput.WinMR.LeftThumbstickPress;
 
-            DisplayLyrics = Instance.GetBool(Section_Mod, "Enabled", true, true);
-            ToggleKeyCode = Instance.GetInt(Section_Mod, nameof(ToggleKeyCode), defaultKeycode, true);
-            DisplayDelay = Instance.GetFloat(Section_Mod, nameof(DisplayDelay), -.1f, true);
-            HideDelay = Instance.GetFloat(Section_Mod, nameof(HideDelay), 0f, true);
-            SaveFetchedLyrics = Instance.GetBool(Section_Mod, nameof(SaveFetchedLyrics), true, true);
-            VerboseLogging = Instance.GetBool(Section_Mod, nameof(VerboseLogging), false, true);
+            DisplayLyrics = GetBool(Section_Mod, "Enabled", true, true);
+            ToggleKeyCode = GetInt(Section_Mod, nameof(ToggleKeyCode), defaultKeycode, true);
+            DisplayDelay = GetFloat(Section_Mod, nameof(DisplayDelay), -.1f, true);
+            HideDelay = GetFloat(Section_Mod, nameof(HideDelay), 0f, true);
+            SaveFetchedLyrics = GetBool(Section_Mod, nameof(SaveFetchedLyrics), true, true);
+            VerboseLogging = GetBool(Section_Mod, nameof(VerboseLogging), false, true);
 
-            EnableShake = Instance.GetBool(Section_TextStyle, nameof(EnableShake), false, true);
-            TextSize = Instance.GetFloat(Section_TextStyle, nameof(TextSize), 4f, true);
+            EnableShake = GetBool(Section_TextStyle, nameof(EnableShake), false, true);
+            TextSize = GetFloat(Section_TextStyle, nameof(TextSize), 4f, true);
 
             TextColor = new Color(
-                Instance.GetInt(Section_TextStyle, "ColorR", 0, true) / 255f,
-                Instance.GetInt(Section_TextStyle, "ColorG", 190, true) / 255f,
-                Instance.GetInt(Section_TextStyle, "ColorB", 255, true) / 255f,
-                Instance.GetInt(Section_TextStyle, "ColorA", 255, true) / 255f);
+                GetInt(Section_TextStyle, "ColorR", 0, true) / 255f,
+                GetInt(Section_TextStyle, "ColorG", 190, true) / 255f,
+                GetInt(Section_TextStyle, "ColorB", 255, true) / 255f,
+                GetInt(Section_TextStyle, "ColorA", 255, true) / 255f);
             Position = new Vector3(
-                Instance.GetFloat(Section_TextStyle, "PosX", 0, true),
-                Instance.GetFloat(Section_TextStyle, "PosY", 4, true),
-                Instance.GetFloat(Section_TextStyle, "PosZ", 0, true));
+                GetFloat(Section_TextStyle, "PosX", 0, true),
+                GetFloat(Section_TextStyle, "PosY", 4, true),
+                GetFloat(Section_TextStyle, "PosZ", 0, true));
+            SettingsReloaded?.Invoke(this, EventArgs.Empty);
         }
     }
 }

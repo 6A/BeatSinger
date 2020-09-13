@@ -16,10 +16,12 @@
 
   <ItemGroup>
     <None Remove="manifest.json" />
+    <None Remove="UI\SettingsView.bsml" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="manifest.json" />
+    <EmbeddedResource Include="UI\SettingsView.bsml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -62,6 +64,9 @@
     </Reference>
     <Reference Include="BS_Utils">
       <HintPath>$(BeatSaberDir)\Plugins\BS_Utils.dll</HintPath>
+    </Reference>
+    <Reference Include="BSML">
+      <HintPath>$(BeatSaberDir)\Plugins\BSML.dll</HintPath>
     </Reference>
   </ItemGroup>
 

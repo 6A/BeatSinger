@@ -257,7 +257,7 @@ namespace BeatSinger
                        + "&subtitle_format=mxm&app_id=web-desktop-app-v1.0"
                        + "&usertoken=180220daeb2405592f296c4aea0f6d15e90e08222b559182bacf92";
 
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
                 Plugin.log?.Debug($"Requesting lyrics from '{url}'");
             UnityWebRequest req = UnityWebRequest.Get(url);
 
@@ -292,7 +292,7 @@ namespace BeatSinger
                     // JSON key not found.
                     Plugin.log?.Error($"Error parsing MusixMatch lyrics json response. Response is missing an expected key.");
                     Plugin.log?.Debug(e);
-                    if (Settings.VerboseLogging)
+                    if (Plugin.config.VerboseLogging)
                     {
                         Plugin.log?.Debug(req.downloadHandler.text);
                     }
@@ -318,7 +318,7 @@ namespace BeatSinger
             }
             JSONNode lyricResponse = res["message"]["body"]["macro_calls"]["track.subtitles.get"]["message"];
             MusixMatchStatus lyricResponseStatus = (MusixMatchStatus)lyricResponse["header"]["status_code"].AsInt;
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
                 Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}'.");
 
             switch (lyricResponseStatus)
@@ -327,7 +327,7 @@ namespace BeatSinger
                     Plugin.log?.Info($"Lyrics not found on MusixMatch.");
                     return null;
                 default:
-                    if (Settings.VerboseLogging)
+                    if (Plugin.config.VerboseLogging)
                         Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}': {lyricResponseStatus.GetReasonString()}");
                     break;
             }

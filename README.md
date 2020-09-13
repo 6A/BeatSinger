@@ -9,7 +9,7 @@ Displays song lyrics in-game.
 > If you want to use them anyway, you'll have to edit their metadata manually so that the song and artist names are valid.
 
 ## Installation
-* Requires [`SongCore`](https://github.com/Kylemc1413/SongCore) and [`BS_Utils`](https://github.com/Kylemc1413/Beat-Saber-Utils), available on [BeatMods](https://beatmods.com/#/mods)
+* Requires [`SongCore`](https://github.com/Kylemc1413/SongCore), [`BS_Utils`](https://github.com/Kylemc1413/Beat-Saber-Utils), and [`BeatSaberMarkupLanguage`](https://github.com/monkeymanboy/BeatSaberMarkupLanguage), available on [BeatMods](https://beatmods.com/#/mods).
 * Drop [`BeatSinger.dll`](https://github.com/71/BeatSinger/releases) into the `Beat Saber/Plugins` directory.
 
 ## Usage

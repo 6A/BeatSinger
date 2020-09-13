@@ -32,10 +32,10 @@ namespace BeatSinger
             // then we get its GameSongController to find the audio clip,
             // and its FlyingTextSpawner to display the lyrics.
 
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
             {
                 Plugin.log?.Debug("Attached to scene.");
-                Plugin.log?.Info($"Lyrics are {(Settings.DisplayLyrics ? "enabled" : "disabled")}.");
+                Plugin.log?.Info($"Lyrics are {(Plugin.config.DisplayLyrics ? "enabled" : "disabled")}.");
             }
 
             textSpawner = FindObjectOfType<FlyingTextSpawner>();
@@ -66,7 +66,7 @@ namespace BeatSinger
 
 
             CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
                 Plugin.log?.Debug($"{level.songName} is {(customLevel != null ? "" : "not ")}a custom level.");
             SubtitleContainer container = null;
             List<Subtitle> subtitles = new List<Subtitle>();
@@ -111,7 +111,7 @@ namespace BeatSinger
                 SpawnText("Lyrics found online", 3f);
                 string songDir = customLevel?.customLevelPath;
                 container = new SubtitleContainer(subtitles);
-                if (Settings.SaveFetchedLyrics)
+                if (Plugin.config.SaveFetchedLyrics)
                 {
                     if (!string.IsNullOrEmpty(songDir))
                     {
@@ -146,14 +146,14 @@ namespace BeatSinger
         {
 #if DEBUG
             if (Input.GetKeyDown(KeyCode.R))
-                Settings.Load();
+                Plugin.config.Load();
 #endif
-            if (!Input.GetKeyUp((KeyCode)Settings.ToggleKeyCode))
+            if (!Input.GetKeyUp((KeyCode)Plugin.config.ToggleKeyCode))
                 return;
 
-            Settings.DisplayLyrics = !Settings.DisplayLyrics;
+            Plugin.config.DisplayLyrics = !Plugin.config.DisplayLyrics;
 
-            SpawnText(Settings.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
+            SpawnText(Plugin.config.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
         }
 
         private IEnumerator DisplayLyrics(SubtitleContainer subtitles)
@@ -166,13 +166,13 @@ namespace BeatSinger
                 yield break;
             }
             int skipped = 0;
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
                 Plugin.log?.Debug($"{subtitles.Count} lyrics found for song. Displaying with offset {subtitles.TimeOffset}s and a scale of {subtitles.TimeScale:P}");
             // Subtitles are sorted by time of appearance, so we can iterate without sorting first.
             foreach (var subtitle in subtitles)
             {
                 float currentTime = audio.songTime;
-                float subtitleTime = subtitle.Time + Settings.DisplayDelay * (1 / audio.timeScale);
+                float subtitleTime = subtitle.Time + Plugin.config.DisplayDelay * (1 / audio.timeScale);
                 // First, skip all subtitles that have already been seen.
                 if (currentTime > subtitleTime)
                 {
@@ -181,27 +181,27 @@ namespace BeatSinger
                 }
                 if (skipped > 0)
                 {
-                    if (Settings.VerboseLogging)
+                    if (Plugin.config.VerboseLogging)
                         Plugin.log?.Debug($"Skipped {skipped} lyrics because they started too soon.");
                     skipped = 0;
                 }
 
                 // Wait for time to display next lyrics
                 yield return new WaitForSeconds((subtitleTime - currentTime) * (1 / audio.timeScale));
-                if (!Settings.DisplayLyrics)
+                if (!Plugin.config.DisplayLyrics)
                     // Don't display lyrics this time
                     continue;
 
                 currentTime = audio.songTime;
                 float displayDuration = ((subtitle.EndTime ?? audio.songEndTime) - currentTime) * (1 / audio.timeScale);
-                if (Settings.VerboseLogging)
+                if (Plugin.config.VerboseLogging)
                     Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 
-                SpawnText(subtitle.Text, displayDuration + Settings.HideDelay, Settings.EnableShake, Settings.TextColor, Settings.TextSize);
+                SpawnText(subtitle.Text, displayDuration + Plugin.config.HideDelay, Plugin.config.EnableShake, Plugin.config.TextColor, Plugin.config.TextSize);
             }
         }
 
-        private void SpawnText(string text, float duration) => SpawnText(text, duration, false, null, Settings.TextSize);
+        private void SpawnText(string text, float duration) => SpawnText(text, duration, false, null, Plugin.config.TextSize);
 
         private void SpawnText(string text, float duration, bool enableShake, Color? color, float fontSize)
         {
@@ -214,7 +214,7 @@ namespace BeatSinger
             Color initialcolor = Accessors.Access_FlyingTextColor(ref textSpawner);
             float initialSize = Accessors.Access_FlyingTextFontSize(ref textSpawner);
 #if DEBUG
-            if (Settings.VerboseLogging)
+            if (Plugin.config.VerboseLogging)
             {
                 Plugin.log?.Info($"Text Settings:");
                 Plugin.log?.Info($"       Duration: {duration}");
@@ -235,7 +235,7 @@ namespace BeatSinger
             if (fontSize > 0)
                 Accessors.Access_FlyingTextFontSize(ref textSpawner) = fontSize;
 
-            textSpawner.SpawnText(Settings.Position, Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
+            textSpawner.SpawnText(Plugin.config.Position, Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
 
             // Reset values
             Accessors.Access_FlyingTextDuration(ref textSpawner) = initialDuration;
