@@ -139,7 +139,6 @@ namespace BeatSinger
                         Plugin.log?.Warn($"Unable save lyrics, song directory couldn't be determined.");
                 }
             }
-
             StartCoroutine(DisplayLyrics(container));
         }
 
@@ -173,7 +172,7 @@ namespace BeatSinger
             foreach (var subtitle in subtitles)
             {
                 float currentTime = audio.songTime;
-                float subtitleTime = subtitle.Time + Settings.DisplayDelay;
+                float subtitleTime = subtitle.Time + Settings.DisplayDelay * (1 / audio.timeScale);
                 // First, skip all subtitles that have already been seen.
                 if (currentTime > subtitleTime)
                 {
@@ -188,13 +187,13 @@ namespace BeatSinger
                 }
 
                 // Wait for time to display next lyrics
-                yield return new WaitForSeconds(subtitleTime - currentTime);
+                yield return new WaitForSeconds((subtitleTime - currentTime) * (1 / audio.timeScale));
                 if (!Settings.DisplayLyrics)
                     // Don't display lyrics this time
                     continue;
 
                 currentTime = audio.songTime;
-                float displayDuration = (subtitle.EndTime ?? audio.songEndTime) - currentTime;
+                float displayDuration = ((subtitle.EndTime ?? audio.songEndTime) - currentTime) * (1 / audio.timeScale);
                 if (Settings.VerboseLogging)
                     Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 
@@ -214,16 +213,17 @@ namespace BeatSinger
             bool initialShake = Accessors.Access_FlyingTextShake(ref textSpawner);
             Color initialcolor = Accessors.Access_FlyingTextColor(ref textSpawner);
             float initialSize = Accessors.Access_FlyingTextFontSize(ref textSpawner);
-
+#if DEBUG
             if (Settings.VerboseLogging)
             {
-                Plugin.log?.Info($"Inital Text Settings:");
+                Plugin.log?.Info($"Text Settings:");
                 Plugin.log?.Info($"       Duration: {duration}");
                 Plugin.log?.Info($"   ShakeEnabled: {(enableShake ? "True" : "False")}");
                 Plugin.log?.Info($"          Color: {(color?.ToString() ?? "Default")}");
                 Plugin.log?.Info($"           Size: {fontSize}");
             }
-            if(duration <= 0)
+#endif
+            if (duration <= 0)
             {
                 Plugin.log?.Warn($"Text '{text}' has a duration less than 0. Using 1s instead.");
                 duration = 1;
@@ -232,7 +232,7 @@ namespace BeatSinger
             Accessors.Access_FlyingTextShake(ref textSpawner) = enableShake;
             if (color.HasValue)
                 Accessors.Access_FlyingTextColor(ref textSpawner) = color.Value;
-            if(fontSize > 0)
+            if (fontSize > 0)
                 Accessors.Access_FlyingTextFontSize(ref textSpawner) = fontSize;
 
             textSpawner.SpawnText(Settings.Position, Quaternion.identity, Quaternion.Inverse(Quaternion.identity), text);
