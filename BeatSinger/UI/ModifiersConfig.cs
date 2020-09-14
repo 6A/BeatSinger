@@ -10,6 +10,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace BeatSinger.UI
 {
@@ -51,7 +52,6 @@ namespace BeatSinger.UI
                 NotifyPropertyChanged();
             }
         }
-
 
         [UIValue(nameof(Enabled))]
         public bool Enabled { get => Plugin.config.DisplayLyrics; set => Plugin.config.DisplayLyrics = value; }
@@ -172,6 +172,27 @@ namespace BeatSinger.UI
 
             SharedCoroutineStarter.instance.StartCoroutine(LyricsFetcher.FetchOnlineLyrics(Plugin.SelectedLevel, container));
         }
+
+        [UIAction("PlaySong")]
+        public void PlaySong()
+        {
+            if (LyricPreviewController == null)
+            {
+                LyricPreviewController = new GameObject("BeatSinger_PreviewPlayer").AddComponent<LyricPreviewController>();
+
+            }
+            else
+                LyricPreviewController.gameObject.SetActive(!LyricPreviewController.gameObject.activeSelf);
+            NotifyPropertyChanged(nameof(PlayButtonText));
+        }
+
+        [UIValue(nameof(PlayButtonText))]
+        public string PlayButtonText => (LyricPreviewController?.gameObject.activeSelf ?? false) ? "Stop" : "Test Song";
+
+        LyricPreviewController LyricPreviewController;
+
+        [UIAction("formatter-percent")]
+        public string FloatToPercent(float val) => val.ToString("P");
 
         public void NotifyPropertyChanged([CallerMemberName] string propertyName = "")
         {

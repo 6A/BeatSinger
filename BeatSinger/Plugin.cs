@@ -158,7 +158,8 @@ namespace BeatSinger
         private void OnGameSceneActive()
         {
             Scene gameScene = SceneManager.GetActiveScene();
-            gameScene.GetRootGameObjects()[0].AddComponent<LyricsComponent>();
+            GameLyricsComponent lyricsComponent = gameScene.GetRootGameObjects()[0].AddComponent<GameLyricsComponent>();
+
         }
     }
 }

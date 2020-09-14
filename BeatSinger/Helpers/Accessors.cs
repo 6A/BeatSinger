@@ -1,4 +1,5 @@
-﻿using IPA.Utilities;
+﻿using HMUI;
+using IPA.Utilities;
 using UnityEngine;
 using Zenject;
 
@@ -34,5 +35,11 @@ namespace BeatSinger.Helpers
 
         public static readonly FieldAccessor<FlyingTextSpawner, float>.Accessor Access_FlyingTextFontSize
             = FieldAccessor<FlyingTextSpawner, float>.GetAccessor("_fontSize");
+
+        public static readonly FieldAccessor<SongPreviewPlayer, AudioSource[]>.Accessor Access_PreviewPlayerAudioSources
+            = FieldAccessor<SongPreviewPlayer, AudioSource[]>.GetAccessor("_audioSources");
+
+        public static readonly FieldAccessor<FlowCoordinator, ScreenSystem>.Accessor Access_ScreenSystem
+            = FieldAccessor<FlowCoordinator, ScreenSystem>.GetAccessor("_screenSystem");
     }
 }
