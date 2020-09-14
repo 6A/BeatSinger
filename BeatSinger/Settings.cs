@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using BeatSaberMarkupLanguage.Attributes;
 using BeatSaberMarkupLanguage.Notify;
+using BeatSinger.Helpers;
 using BS_Utils.Utilities;
 using UnityEngine;
 using UnityEngine.XR;
@@ -12,13 +13,27 @@ namespace BeatSinger
     {
         public static readonly Color DefaultColor = new Color(0, 190, 255, 255);
         public event EventHandler SettingsReloaded;
+        public event EventHandler EnabledChanged;
         private static Vector3 _position;
         public const string ModName = "BeatSinger";
         public const string Section_Mod = "General";
         public const string Section_TextStyle = "Text Style";
 
+        private bool _displayLyrics;
+
         [UIValue(nameof(DisplayLyrics))]
-        public bool DisplayLyrics { get; set; }
+        public bool DisplayLyrics
+        {
+            get { return _displayLyrics; }
+            set
+            {
+                if (_displayLyrics == value) return;
+                _displayLyrics = value;
+                EnabledChanged.RaiseEventSafe(this, nameof(EnabledChanged));
+            }
+        }
+
+
         [UIValue(nameof(ToggleKeyCode))]
         public int ToggleKeyCode { get; set; }
         [UIValue(nameof(DisplayDelay))]

@@ -32,6 +32,11 @@ namespace BeatSinger.Components
             }
         }
 
+        public void OnDisable()
+        {
+            FloatingText.text = "";
+        }
+
 
         public void SpawnText(string text, float duration) => SpawnText(text, duration, false, null, 4f);
 

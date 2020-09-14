@@ -26,8 +26,13 @@ namespace BeatSinger
 
         internal static IPALogger log;
         internal static Settings config;
-        internal static readonly ModifiersConfig modifierConfig = new ModifiersConfig();
+        private static ModifiersConfig modifierConfig;
+        /// <summary>
+        /// Do not use an empty container and add subtitles after without raising <see cref="SelectedLevelChanged"/>,
+        /// <see cref="ModifiersConfig"/> will not update it's enabled state properly.
+        /// </summary>
         internal static SubtitleContainer SelectedLevelSubtitles { get => selectedLevelSubtitles; }
+        internal static bool SubtitlesLoaded => (selectedLevelSubtitles?.Count ?? 0) > 0;
         internal static event EventHandler<LyricsFetchedEventArgs> SelectedLevelChanged;
 
         [Init]
@@ -39,6 +44,7 @@ namespace BeatSinger
             if (config.VerboseLogging)
                 log.Debug($"VerboseLogging enabled.");
             BeatSaberMarkupLanguage.Settings.BSMLSettings.instance.AddSettingsMenu(Name, "BeatSinger.UI.SettingsView.bsml", config);
+            modifierConfig = new ModifiersConfig();
         }
 
         [OnEnable]

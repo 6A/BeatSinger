@@ -40,24 +40,6 @@ namespace BeatSinger
 
         private AudioSource[] AudioSources;
         private Vector3 PreviousMainPosition;
-        private IEnumerator LogPosition()
-        {
-            while (enabled)
-            {
-                AudioSource[] sources = AudioSources;
-                if (PreviewPlayer != null && sources != null && sources.Length > 0)
-                {
-                    Plugin.log?.Info($"Preview position:");
-                    for (int i = 0; i < sources.Length; i++)
-                    {
-                        Plugin.log?.Info($"  {i}: {sources[i].isPlaying}|{sources[i].time}");
-                    }
-                }
-                else
-                    Plugin.log?.Debug("No audio sources.");
-                yield return new WaitForSeconds(3f);
-            }
-        }
 
         #region Monobehaviour Messages
         /// <summary>
@@ -81,6 +63,11 @@ namespace BeatSinger
         /// </summary>
         private async void OnEnable()
         {
+            if (!Plugin.SubtitlesLoaded)
+            {
+                Plugin.log?.Warn($"Cannot preview song's lyrics, no lyrics are available.");
+                return;
+            }
             AudioClip thing = await Plugin.SelectedLevel.GetPreviewAudioClipAsync(CancellationToken.None);
 
             HMUI.Screen screen = MainScreen;
@@ -90,11 +77,10 @@ namespace BeatSinger
                     PreviousMainPosition = screen.transform.position;
                 screen.transform.position = new Vector3(PreviousMainPosition.x, 100, PreviousMainPosition.z);
             }
-            Plugin.log?.Info($"Starting song preview: {thing.loadState}");
             thing.LoadAudioData();
             if (thing.loadState != AudioDataLoadState.Loaded)
             {
-                Plugin.log?.Info($"Beginning audio load: {thing.loadState}");
+                Plugin.log?.Debug($"Beginning audio load: {thing.loadState}");
                 await Task.Run(async () =>
                 {
                     AudioDataLoadState loadState = thing.loadState;
@@ -103,7 +89,7 @@ namespace BeatSinger
                         await Task.Delay(25).ConfigureAwait(false);
                         loadState = thing.loadState;
                     }
-                    Plugin.log?.Info($"Audio loading finished: {thing.loadState}");
+                    Plugin.log?.Debug($"Audio loading finished: {thing.loadState}");
                 });
             }
             PreviewPlayer.CrossfadeTo(thing, 0, thing.length);
@@ -114,7 +100,6 @@ namespace BeatSinger
                 ILyricSpawner spawner = gameObject.AddComponent<SimpleLyricSpawner>();
                 LyricsComponent.Initialize(new PreviewAudioSource(thing, AudioSources), spawner, Plugin.SelectedLevelSubtitles);
             }
-            StartCoroutine(LogPosition());
         }
 
         /// <summary>

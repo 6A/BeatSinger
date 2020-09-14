@@ -82,7 +82,7 @@ namespace BeatSinger
                 Plugin.log?.Debug($"{level.songName} is {(customLevel != null ? "" : "not ")}a custom level.");
             SubtitleContainer container = Plugin.SelectedLevelSubtitles;
 
-            if (container != null)
+            if (container != null && container.Count > 0)
             {
                 Initialize(audioWrapper, spawner, container);
                 Plugin.log?.Info("Lyrics already loaded.");
@@ -92,6 +92,7 @@ namespace BeatSinger
             }
             else if (customLevel != null && LyricsFetcher.TryGetLocalLyrics(customLevel, out container))
             {
+                // This doesn't set Plugin.SelectedLevelSubtitles, but it probably doesn't matter because they'll be loaded on MenuScene.
                 Initialize(audioWrapper, spawner, container);
                 Plugin.log?.Info("Found local lyrics.");
                 Plugin.log?.Info($"These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");

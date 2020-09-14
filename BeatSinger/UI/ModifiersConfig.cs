@@ -18,10 +18,21 @@ namespace BeatSinger.UI
     {
         public ModifiersConfig()
         {
+            Plugin.config.EnabledChanged += OnEnabledChanged;
             Plugin.SelectedLevelChanged += OnSelectedLevelChanged;
             FetchEnabled = !LyricsFetcher.FetchInProgress;
             LyricsFetcher.LyricsOnlineFetchStarted += OnOnlineFetchStarted;
             LyricsFetcher.LyricsOnlineFetchFinished += OnOnlineFetchFinished;
+        }
+        private void NotifyEnabledChanged()
+        {
+            NotifyPropertyChanged(nameof(Enabled));
+            NotifyPropertyChanged(nameof(ConfigEnabled));
+            NotifyPropertyChanged(nameof(FetchEnabled));
+        }
+        private void OnEnabledChanged(object sender, EventArgs _)
+        {
+            NotifyEnabledChanged();
         }
 
         private void OnSelectedLevelChanged(object sender, LyricsFetchedEventArgs e)
@@ -54,7 +65,15 @@ namespace BeatSinger.UI
         }
 
         [UIValue(nameof(Enabled))]
-        public bool Enabled { get => Plugin.config.DisplayLyrics; set => Plugin.config.DisplayLyrics = value; }
+        public bool Enabled
+        {
+            get => Plugin.config.DisplayLyrics;
+            set
+            {
+                Plugin.config.DisplayLyrics = value;
+                NotifyEnabledChanged();
+            }
+        }
         private float _timeOffset;
 
         [UIValue(nameof(TimeOffset))]
@@ -92,7 +111,7 @@ namespace BeatSinger.UI
         [UIValue(nameof(ConfigEnabled))]
         public bool ConfigEnabled
         {
-            get { return _configEnabled; }
+            get { return _configEnabled && Enabled && (Subtitles?.Count ?? 0) > 0; }
             set
             {
                 if (_configEnabled == value) return;
@@ -105,7 +124,7 @@ namespace BeatSinger.UI
         [UIValue(nameof(FetchEnabled))]
         public bool FetchEnabled
         {
-            get => _fetchEnabled && !ConfigEnabled;
+            get => _fetchEnabled && !ConfigEnabled && Enabled;
             set
             {
                 _fetchEnabled = value;
@@ -120,23 +139,25 @@ namespace BeatSinger.UI
             get { return _subtitles; }
             private set
             {
-                if (_subtitles == value) return;
-                _subtitles = value;
-                if (value != null)
+                if (_subtitles != value)
                 {
-                    _timeOffset = Subtitles.TimeOffset;
-                    _timeScale = Subtitles.TimeScale;
-                    ConfigEnabled = true;
+                    _subtitles = value;
+                    if (value != null)
+                    {
+                        _timeOffset = Subtitles.TimeOffset;
+                        _timeScale = Subtitles.TimeScale;
+                    }
+                    else
+                    {
+                        _timeOffset = 0;
+                        _timeScale = 1;
+                    }
+                    NotifyPropertyChanged();
+                    NotifyPropertyChanged(nameof(TimeOffset));
+                    NotifyPropertyChanged(nameof(TimeScale));
                 }
-                else
-                {
-                    _timeOffset = 0;
-                    _timeScale = 1;
-                    ConfigEnabled = false;
-                }
-                NotifyPropertyChanged();
-                NotifyPropertyChanged(nameof(TimeOffset));
-                NotifyPropertyChanged(nameof(TimeScale));
+                ConfigEnabled = (value?.Count ?? 0) > 0;
+
             }
         }
 
@@ -179,10 +200,11 @@ namespace BeatSinger.UI
             if (LyricPreviewController == null)
             {
                 LyricPreviewController = new GameObject("BeatSinger_PreviewPlayer").AddComponent<LyricPreviewController>();
-
             }
-            else
+            else if (Plugin.SubtitlesLoaded)
                 LyricPreviewController.gameObject.SetActive(!LyricPreviewController.gameObject.activeSelf);
+            else
+                LyricPreviewController.gameObject.SetActive(false);
             NotifyPropertyChanged(nameof(PlayButtonText));
         }
 
