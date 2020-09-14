@@ -40,7 +40,20 @@ namespace BeatSinger
 
         private AudioSource[] AudioSources;
         private Vector3 PreviousMainPosition;
-
+        private CancellationTokenSource loadCancellationSource;
+        private CancellationTokenSource LoadCancellationSource
+        {
+            get => loadCancellationSource;
+            set
+            {
+                if (loadCancellationSource != null)
+                {
+                    loadCancellationSource.Cancel();
+                    loadCancellationSource.Dispose();
+                }
+                loadCancellationSource = value;
+            }
+        }
         #region Monobehaviour Messages
         /// <summary>
         /// Only ever called once, mainly used to initialize variables.
@@ -63,12 +76,13 @@ namespace BeatSinger
         /// </summary>
         private async void OnEnable()
         {
+            LoadCancellationSource = new CancellationTokenSource();
             if (!Plugin.SubtitlesLoaded)
             {
                 Plugin.log?.Warn($"Cannot preview song's lyrics, no lyrics are available.");
                 return;
             }
-            AudioClip thing = await Plugin.SelectedLevel.GetPreviewAudioClipAsync(CancellationToken.None);
+            AudioClip audioClip = await Plugin.SelectedLevel.GetPreviewAudioClipAsync(loadCancellationSource.Token);
 
             HMUI.Screen screen = MainScreen;
             if (screen != null)
@@ -77,28 +91,28 @@ namespace BeatSinger
                     PreviousMainPosition = screen.transform.position;
                 screen.transform.position = new Vector3(PreviousMainPosition.x, 100, PreviousMainPosition.z);
             }
-            thing.LoadAudioData();
-            if (thing.loadState != AudioDataLoadState.Loaded)
+            audioClip.LoadAudioData();
+            if (audioClip.loadState != AudioDataLoadState.Loaded)
             {
-                Plugin.log?.Debug($"Beginning audio load: {thing.loadState}");
+                Plugin.log?.Debug($"Beginning audio load: {audioClip.loadState}");
                 await Task.Run(async () =>
                 {
-                    AudioDataLoadState loadState = thing.loadState;
+                    AudioDataLoadState loadState = audioClip.loadState;
                     while (loadState == AudioDataLoadState.Loading)
                     {
                         await Task.Delay(25).ConfigureAwait(false);
-                        loadState = thing.loadState;
+                        loadState = audioClip.loadState;
                     }
-                    Plugin.log?.Debug($"Audio loading finished: {thing.loadState}");
+                    Plugin.log?.Debug($"Audio loading finished: {audioClip.loadState}");
                 });
             }
-            PreviewPlayer.CrossfadeTo(thing, 0, thing.length);
+            PreviewPlayer.CrossfadeTo(audioClip, 0, audioClip.length);
             AudioSources = Accessors.Access_PreviewPlayerAudioSources(ref PreviewPlayer);
-            if (thing != null && AudioSources != null && AudioSources.Length > 0)
+            if (audioClip != null && AudioSources != null && AudioSources.Length > 0)
             {
                 LyricsComponent = gameObject.AddComponent<LyricsComponent>();
                 ILyricSpawner spawner = gameObject.AddComponent<SimpleLyricSpawner>();
-                LyricsComponent.Initialize(new PreviewAudioSource(thing, AudioSources), spawner, Plugin.SelectedLevelSubtitles);
+                LyricsComponent.Initialize(new PreviewAudioSource(audioClip, AudioSources), spawner, Plugin.SelectedLevelSubtitles);
             }
         }
 
@@ -107,6 +121,7 @@ namespace BeatSinger
         /// </summary>
         private void OnDisable()
         {
+            LoadCancellationSource = null;
             HMUI.Screen screen = MainScreen;
             if (screen != null)
             {
