@@ -32,8 +32,8 @@ namespace BeatSinger
                 EnabledChanged.RaiseEventSafe(this, nameof(EnabledChanged));
             }
         }
-
-
+        [UIValue(nameof(EnableToggleKey))]
+        public bool EnableToggleKey { get; set; }
         [UIValue(nameof(ToggleKeyCode))]
         public int ToggleKeyCode { get; set; }
         [UIValue(nameof(DisplayDelay))]
@@ -97,6 +97,7 @@ namespace BeatSinger
             if (VerboseLogging)
                 Plugin.log?.Debug($"Saving config.");
             SetBool(Section_Mod, "Enabled", DisplayLyrics);
+            SetBool(Section_Mod, nameof(EnableToggleKey), EnableToggleKey);
             SetInt(Section_Mod, nameof(ToggleKeyCode), ToggleKeyCode);
             SetFloat(Section_Mod, nameof(DisplayDelay), DisplayDelay);
             SetFloat(Section_Mod, nameof(HideDelay), HideDelay);
@@ -128,6 +129,7 @@ namespace BeatSinger
                 defaultKeycode = (int)ConInput.WinMR.LeftThumbstickPress;
 
             DisplayLyrics = GetBool(Section_Mod, "Enabled", true, true);
+            EnableToggleKey = GetBool(Section_Mod, nameof(EnableToggleKey), false, true);
             ToggleKeyCode = GetInt(Section_Mod, nameof(ToggleKeyCode), defaultKeycode, true);
             DisplayDelay = GetFloat(Section_Mod, nameof(DisplayDelay), -.1f, true);
             HideDelay = GetFloat(Section_Mod, nameof(HideDelay), 0f, true);

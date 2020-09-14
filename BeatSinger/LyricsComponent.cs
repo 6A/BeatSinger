@@ -70,12 +70,15 @@ namespace BeatSinger
             if (Input.GetKeyDown(KeyCode.R))
                 Plugin.config.Load();
 #endif
-            if (!Input.GetKeyUp((KeyCode)Plugin.config.ToggleKeyCode))
-                return;
+            if (Plugin.config.EnableToggleKey)
+            {
+                if (!Input.GetKeyUp((KeyCode)Plugin.config.ToggleKeyCode))
+                    return;
 
-            Plugin.config.DisplayLyrics = !Plugin.config.DisplayLyrics;
+                Plugin.config.DisplayLyrics = !Plugin.config.DisplayLyrics;
 
-            textSpawner.SpawnText(Plugin.config.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
+                textSpawner.SpawnText(Plugin.config.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
+            }
         }
 
         protected IEnumerator DisplayLyrics()
