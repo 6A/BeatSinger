@@ -14,12 +14,16 @@ namespace BeatSinger
 {
     using BeatSinger.Helpers;
     using SimpleJSON;
+    using System.Threading.Tasks;
 
     /// <summary>
     ///   Provides utilities for asynchronously fetching lyrics.
     /// </summary>
     public static class LyricsFetcher
     {
+        public static event EventHandler<IPreviewBeatmapLevel> LyricsOnlineFetchStarted;
+        public static event EventHandler<LyricsFetchedEventArgs> LyricsOnlineFetchFinished;
+        public static bool FetchInProgress { get; private set; }
         private static void PopulateFromJson(string jsonString, List<Subtitle> subtitles)
         {
             JSONNode json = JSON.Parse(jsonString);
@@ -163,11 +167,13 @@ namespace BeatSinger
         ///   Fetches the lyrics of the given song on the local file system and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static bool TryGetLocalLyrics(string songDirectory, out SubtitleContainer container)
+        public static bool TryGetLocalLyrics(CustomPreviewBeatmapLevel level, out SubtitleContainer container)
         {
-
-            Plugin.log?.Debug($"Song directory: {songDirectory}.");
             container = SubtitleContainer.Empty;
+            if (level == null)
+                return false;
+            string songDirectory = level.customLevelPath;
+            Plugin.log?.Debug($"Song directory: {songDirectory}.");
             if (string.IsNullOrWhiteSpace(songDirectory) || !Directory.Exists(songDirectory))
                 return false;
 
@@ -196,20 +202,105 @@ namespace BeatSinger
                     container.Source = srtFile;
                     container.SourceType = LyricSource.File_SRT;
                     if (subtitles.Count > 0)
+                    {
                         container.SetSubtitles(subtitles);
-                    return container.Count > 0;
+                        return true;
+                    }
                 }
-
             }
-
             return false;
         }
 
+        public static IEnumerator FetchOnlineLyrics(IPreviewBeatmapLevel level, SubtitleContainer container)
+        {
+            if (level == null)
+                yield break;
+            if (FetchInProgress)
+                yield break;
+            LyricsOnlineFetchStarted.RaiseEventSafe(null, level, nameof(LyricsOnlineFetchStarted));
+            Plugin.log?.Debug($"Searching for lyrics for {level.songName} by {level.songAuthorName}");
+            FetchInProgress = true;
+            try
+            {
+                CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
+                List<Subtitle> subtitles = new List<Subtitle>();
+                yield return GetBeatSingerOnlineLyrics(level, subtitles);
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "beatsinger.herokuapp.com";
+                    container.SourceType = LyricSource.Online_BeatSinger;
+                    goto FoundOnlineLyrics;
+                }
+
+                if (!string.IsNullOrEmpty(level.songAuthorName))
+                    yield return GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles);
+                else
+                    Plugin.log?.Debug($"Song has no artist name.");
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "MusixMatch";
+                    container.SourceType = LyricSource.Online_MusixMatch;
+                    goto FoundOnlineLyrics;
+                }
+                if (!string.IsNullOrEmpty(level.songSubName))
+                    yield return GetMusixmatchLyrics(level.songName, level.songSubName, subtitles);
+                else
+                    Plugin.log?.Debug($"Song has no subname.");
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "MusixMatch";
+                    container.SourceType = LyricSource.Online_MusixMatch;
+                    goto FoundOnlineLyrics;
+                }
+
+                yield break;
+
+            FoundOnlineLyrics:
+                string songDir = customLevel?.customLevelPath;
+                container.SetSubtitles(subtitles);
+                if (Plugin.config.SaveFetchedLyrics)
+                {
+                    if (!string.IsNullOrEmpty(songDir))
+                    {
+                        Task.Run(() =>
+                        {
+                            string lyricsPath = Path.Combine(songDir, "lyrics.json");
+                            try
+                            {
+                                if (!File.Exists(lyricsPath))
+                                {
+                                    File.WriteAllText(lyricsPath, container.ToJson().ToString(3));
+                                    Plugin.log?.Info($"Saved fetched lyrics to '{lyricsPath}'");
+                                }
+                                else
+                                    Plugin.log?.Warn($"Unable to save lyrics, file already exists: '{lyricsPath}'");
+                            }
+                            catch (Exception e)
+                            {
+                                Plugin.log?.Error($"Error saving fetched lyrics to '{lyricsPath}': {e.Message}");
+                                Plugin.log?.Debug(e);
+                            }
+                        });
+                    }
+                    else
+                        Plugin.log?.Warn($"Unable save lyrics, song directory couldn't be determined.");
+                }
+            }
+            finally
+            {
+                FetchInProgress = false;
+                LyricsOnlineFetchFinished.RaiseEventSafe(null, new LyricsFetchedEventArgs(level, container), nameof(LyricsOnlineFetchFinished));
+            }
+        }
+
         /// <summary>
-        ///   Fetches the lyrics of the given song online asynchronously and, if they're found,
-        ///   populates the given list.
+        ///   Fetches the lyrics of the given song online asynchronously from the BeatSinger website
+        ///   and, if they're found, populates the given list.
         /// </summary>
-        public static IEnumerator GetOnlineLyrics(IBeatmapLevel level, List<Subtitle> subtitles)
+        private static IEnumerator GetBeatSingerOnlineLyrics(IPreviewBeatmapLevel level, List<Subtitle> subtitles)
         {
             // Perform request
             UnityWebRequest req = UnityWebRequest.Get($"https://beatsinger.herokuapp.com/{level.GetLyricsHash()}");
@@ -249,7 +340,7 @@ namespace BeatSinger
         ///   Fetches the lyrics of the given song online asynchronously using Musixmatch and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static IEnumerator GetMusixmatchLyrics(string song, string artist, List<Subtitle> subtitles)
+        private static IEnumerator GetMusixmatchLyrics(string song, string artist, List<Subtitle> subtitles)
         {
             // Perform request
             string qTrack = UnityWebRequest.EscapeURL(song);
@@ -322,8 +413,6 @@ namespace BeatSinger
             }
             JSONNode lyricResponse = res["message"]["body"]["macro_calls"]["track.subtitles.get"]["message"];
             MusixMatchStatus lyricResponseStatus = (MusixMatchStatus)lyricResponse["header"]["status_code"].AsInt;
-            if (Plugin.config.VerboseLogging)
-                Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}'.");
 
             switch (lyricResponseStatus)
             {
@@ -347,11 +436,22 @@ namespace BeatSinger
         /// <summary>
         ///   Gets an ID that can be used to identify lyrics on the Beat Singer lyrics resolver.
         /// </summary>
-        public static string GetLyricsHash(this IBeatmapLevel level)
+        public static string GetLyricsHash(this IPreviewBeatmapLevel level)
         {
             string id = string.Join(", ", level.songName, level.songAuthorName, level.songSubName, level.beatsPerMinute, level.songDuration, level.songTimeOffset);
 
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(id));
+        }
+    }
+
+    public class LyricsFetchedEventArgs
+    {
+        public readonly IPreviewBeatmapLevel BeatmapLevel;
+        public readonly SubtitleContainer Subtitles;
+        public LyricsFetchedEventArgs(IPreviewBeatmapLevel level, SubtitleContainer subtitles)
+        {
+            BeatmapLevel = level;
+            Subtitles = subtitles;
         }
     }
 

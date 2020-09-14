@@ -16,11 +16,19 @@ namespace BeatSinger
     {
         public string Name => "Beat Singer";
         public string Version => "1.1.0.0";
+
+        private static IPreviewBeatmapLevel selectedLevel;
+        internal static IPreviewBeatmapLevel SelectedLevel
+        {
+            get => selectedLevel;
+        }
+        private static SubtitleContainer selectedLevelSubtitles;
+
         internal static IPALogger log;
         internal static Settings config;
         internal static readonly ModifiersConfig modifierConfig = new ModifiersConfig();
-        internal static IPreviewBeatmapLevel SelectedLevel;
-        internal static SubtitleContainer SelectedLevelSubtitles;
+        internal static SubtitleContainer SelectedLevelSubtitles { get => selectedLevelSubtitles; }
+        internal static event EventHandler<LyricsFetchedEventArgs> SelectedLevelChanged;
 
         [Init]
         public void Init(IPALogger logger)
@@ -31,17 +39,71 @@ namespace BeatSinger
             if (config.VerboseLogging)
                 log.Debug($"VerboseLogging enabled.");
             BeatSaberMarkupLanguage.Settings.BSMLSettings.instance.AddSettingsMenu(Name, "BeatSinger.UI.SettingsView.bsml", config);
-
         }
 
         [OnEnable]
         public void OnEnabled()
         {
-            BS_Utils.Utilities.BSEvents.gameSceneActive -= OnGameSceneActive;
+            SubscribeEvents();
+            BeatSaberMarkupLanguage.GameplaySetup.GameplaySetup.instance.AddTab(Name, "BeatSinger.UI.ModifiersView.bsml", modifierConfig);
+        }
+
+        [OnDisable]
+        public void OnDisabled()
+        {
+            UnsubscribeEvents();
+            BeatSaberMarkupLanguage.GameplaySetup.GameplaySetup.instance.RemoveTab(Name);
+        }
+
+        [OnExit]
+        public void OnApplicationQuit()
+        {
+            config.Save();
+        }
+
+        public static SubtitleContainer GetSubtitlesForLevel(CustomPreviewBeatmapLevel customLevel)
+        {
+            if (customLevel == null)
+                return null;
+            try
+            {
+                if (LyricsFetcher.TryGetLocalLyrics(customLevel, out SubtitleContainer subtitles))
+                {
+                    return subtitles;
+                }
+            }
+            catch (Exception e)
+            {
+                log?.Error($"Error loading local lyrics for '{customLevel?.songName}': {e.Message}");
+                log?.Debug(e);
+            }
+            return null;
+        }
+
+        private void SubscribeEvents()
+        {
+            UnsubscribeEvents();
             BS_Utils.Utilities.BSEvents.gameSceneActive += OnGameSceneActive;
             BS_Utils.Utilities.BSEvents.levelSelected += OnLevelSelected;
             BS_Utils.Utilities.BSEvents.menuSceneActive += OnMenuSceneActive;
-            BeatSaberMarkupLanguage.GameplaySetup.GameplaySetup.instance.AddTab(Name, "BeatSinger.UI.ModifiersView.bsml", modifierConfig);
+            LyricsFetcher.LyricsOnlineFetchFinished += OnLyricsFetched;
+        }
+
+        private void UnsubscribeEvents()
+        {
+            BS_Utils.Utilities.BSEvents.gameSceneActive -= OnGameSceneActive;
+            BS_Utils.Utilities.BSEvents.levelSelected -= OnLevelSelected;
+            BS_Utils.Utilities.BSEvents.menuSceneActive -= OnMenuSceneActive;
+            LyricsFetcher.LyricsOnlineFetchFinished -= OnLyricsFetched;
+        }
+
+        private void OnLyricsFetched(object sender, LyricsFetchedEventArgs e)
+        {
+            if (SelectedLevel == e.BeatmapLevel)
+            {
+                selectedLevelSubtitles = e.Subtitles;
+                SelectedLevelChanged.RaiseEventSafe(this, new LyricsFetchedEventArgs(e.BeatmapLevel, e.Subtitles), nameof(SelectedLevelChanged));
+            }
         }
 
         private void OnMenuSceneActive()
@@ -49,8 +111,7 @@ namespace BeatSinger
             if (SelectedLevelSubtitles == null && SelectedLevel is CustomPreviewBeatmapLevel customLevel)
             {
                 SubtitleContainer subtitles = GetSubtitlesForLevel(customLevel);
-                SelectedLevelSubtitles = subtitles;
-                modifierConfig.Subtitles = subtitles;
+                selectedLevelSubtitles = subtitles;
                 if (subtitles != null)
                 {
                     string fileName = subtitles.Source;
@@ -58,19 +119,20 @@ namespace BeatSinger
                         fileName = Path.GetFileName(fileName);
                     log?.Info($"Local subtitles loaded for '{customLevel.songName}' from {fileName}");
                 }
+                SelectedLevelChanged.RaiseEventSafe(this, new LyricsFetchedEventArgs(customLevel, subtitles), nameof(SelectedLevelChanged));
             }
         }
 
         private void OnLevelSelected(LevelCollectionViewController _, IPreviewBeatmapLevel level)
         {
-            SelectedLevel = level;
-            SelectedLevelSubtitles = null;
-            modifierConfig.Subtitles = null;
+            if (config.VerboseLogging)
+                Plugin.log?.Debug($"Level selected: {level?.songName}");
+            selectedLevel = level;
+            selectedLevelSubtitles = null;
             if (level is CustomPreviewBeatmapLevel customLevel)
             {
                 SubtitleContainer subtitles = GetSubtitlesForLevel(customLevel);
-                SelectedLevelSubtitles = subtitles;
-                modifierConfig.Subtitles = subtitles;
+                selectedLevelSubtitles = subtitles;
                 if (subtitles != null)
                 {
                     string fileName = subtitles.Source;
@@ -89,44 +151,9 @@ namespace BeatSinger
                 if (config.VerboseLogging)
                     log?.Info($"'{level.songName}' is not a custom level.");
             }
+
+            SelectedLevelChanged.RaiseEventSafe(this, new LyricsFetchedEventArgs(level, selectedLevelSubtitles), nameof(SelectedLevelChanged));
         }
-
-        public static SubtitleContainer GetSubtitlesForLevel(CustomPreviewBeatmapLevel customLevel)
-        {
-            if (customLevel == null)
-                return null;
-            try
-            {
-                if (LyricsFetcher.TryGetLocalLyrics(customLevel.customLevelPath, out SubtitleContainer subtitles))
-                {
-                    return subtitles;
-                }
-
-            }
-            catch (Exception e)
-            {
-                log?.Error($"Error loading local lyrics for '{customLevel?.songName}': {e.Message}");
-                log?.Debug(e);
-            }
-            return null;
-        }
-
-
-        [OnDisable]
-        public void OnDisabled()
-        {
-            BS_Utils.Utilities.BSEvents.gameSceneActive -= OnGameSceneActive;
-            BS_Utils.Utilities.BSEvents.levelSelected -= OnLevelSelected;
-            BeatSaberMarkupLanguage.GameplaySetup.GameplaySetup.instance.RemoveTab(Name);
-        }
-
-        [OnExit]
-        public void OnApplicationQuit()
-        {
-            config.Save();
-        }
-
-
 
         private void OnGameSceneActive()
         {

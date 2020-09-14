@@ -52,14 +52,53 @@ namespace BeatSinger.Helpers
             }
             return array;
         }
-        public static JSONObject ToJson(this SubtitleContainer subtitles)
+        public static JSONObject ToJson(this SubtitleContainer subtitles, bool convertSrt = false)
         {
             JSONObject jObject = new JSONObject();
             jObject["timeOffset"] = subtitles.TimeOffset;
             jObject["timeScale"] = subtitles.TimeScale;
-            JSONArray array = subtitles.Subtitles.ToJsonArray();
-            jObject["subtitles"] = array;
+            if (convertSrt || subtitles.SourceType != LyricSource.File_SRT)
+            {
+                JSONArray array = subtitles.Subtitles.ToJsonArray();
+                jObject["subtitles"] = array;
+            }
             return jObject;
+        }
+
+        public static void RaiseEventSafe(this EventHandler e, object sender, string eventName)
+        {
+            EventHandler[] handlers = e?.GetInvocationList().Select(d => (EventHandler)d).ToArray()
+                ?? Array.Empty<EventHandler>();
+            for (int i = 0; i < handlers.Length; i++)
+            {
+                try
+                {
+                    handlers[i].Invoke(sender, EventArgs.Empty);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.log?.Error($"Error in {eventName} handlers '{handlers[i]?.Method.Name}': {ex.Message}");
+                    Plugin.log?.Debug(ex);
+                }
+            }
+        }
+
+        public static void RaiseEventSafe<TArgs>(this EventHandler<TArgs> e, object sender, TArgs args, string eventName)
+        {
+            EventHandler<TArgs>[] handlers = e?.GetInvocationList().Select(d => (EventHandler<TArgs>)d).ToArray()
+                ?? Array.Empty<EventHandler<TArgs>>();
+            for (int i = 0; i < handlers.Length; i++)
+            {
+                try
+                {
+                    handlers[i].Invoke(sender, args);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.log?.Error($"Error in {eventName} handlers '{handlers[i]?.Method.Name}': {ex.Message}");
+                    Plugin.log?.Debug(ex);
+                }
+            }
         }
     }
 }

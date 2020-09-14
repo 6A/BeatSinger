@@ -5,5 +5,7 @@
                     bind-value='true' apply-on-change='true' min='-20' max='20' increment='0.5' />
     <slider-setting text='Time Scale' value='TimeScale' interactable='~ConfigEnabled' 
                     bind-value='true' apply-on-change='true' min='1' max='200' increment='1' />
+    <button text='Fetch Online' on-click='Fetch' interactable='~FetchEnabled' />
+    <button text='Save' on-click='SaveSettings' interactable='~ConfigEnabled' />
   </settings-container>
 </modifier-container>
