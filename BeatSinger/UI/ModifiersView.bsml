@@ -1,8 +1,9 @@
 ﻿<modifier-container xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
   <settings-container>
     <bool-setting text='Enabled' value='Enabled' hover-hint='Enable lyrics, if available.' apply-on-change='true'/>
-    <slider-setting text='Time Offset' value='TimeOffset' interactable='~ConfigEnabled' hover-hint='Amount of time to offset the lyrics by in seconds.'
-                    bind-value='true' apply-on-change='true' min='-20' max='20' increment='0.5' />
+    <slider-setting id='OffsetSlider' text='Time Offset' value='TimeOffset' interactable='~ConfigEnabled' hover-hint='Amount of time to offset the lyrics by in seconds.'
+                    bind-value='true' apply-on-change='true' increment='0.5' min='-15' max='15'
+                    onDragStarted='OnDragStarted' onDragReleased='OnDragReleased' updateDuringDrag='false' />
     <slider-setting text='Time Scale' value='TimeScale' formatter='formatter-percent' interactable='~ConfigEnabled' 
                     hover-hint='Multiply lyric timings by this %. You probably do not need this.'
                     bind-value='true' apply-on-change='true' min='.1' max='2' increment='.05' />

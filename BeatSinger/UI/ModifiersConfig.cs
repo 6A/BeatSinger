@@ -1,21 +1,27 @@
 ﻿using BeatSaberMarkupLanguage.Attributes;
+using BeatSaberMarkupLanguage.Components.Settings;
 using BeatSaberMarkupLanguage.Notify;
-using BeatSaberMarkupLanguage.Parser;
+using BeatSaberMarkupLanguage.TypeHandlers.Settings;
 using BeatSinger.Helpers;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace BeatSinger.UI
 {
     public class ModifiersConfig : INotifiableHost
     {
+        [UIAction("OnDragReleased")]
+        private void OnDragRelease()
+        {
+            UpdateSliderBounds(_offsetSlider);
+        }
+
+        [UIComponent("OffsetSlider")]
+        protected SliderSetting _offsetSlider;
+
+
         public ModifiersConfig()
         {
             Plugin.config.EnabledChanged += OnEnabledChanged;
@@ -90,6 +96,30 @@ namespace BeatSinger.UI
             }
         }
 
+        public float OffsetMax
+        {
+            get => DragReleaseSupported ? _timeOffset + 5f : 15f;
+        }
+
+        public float OffsetMin
+        {
+            get => DragReleaseSupported ? _timeOffset - 5f : -15f;
+        }
+
+        public void UpdateSliderBounds(SliderSetting slider)
+        {
+            if (DragReleaseSupported && slider != null)
+            {
+                float val = slider.slider.value;
+                slider.slider.minValue = OffsetMin;
+                slider.slider.maxValue = OffsetMax;
+                slider.slider.numberOfSteps = (int)Math.Round((OffsetMax - OffsetMin) / slider.increments) + 1;
+                slider.slider.value = val + 0.0001f;
+                slider.slider.value = val;
+                slider.ReceiveValue();
+            }
+        }
+
         private float _timeScale;
 
         [UIValue(nameof(TimeScale))]
@@ -152,6 +182,7 @@ namespace BeatSinger.UI
                         _timeOffset = 0;
                         _timeScale = 1;
                     }
+                    UpdateSliderBounds(_offsetSlider);
                     NotifyPropertyChanged();
                     NotifyPropertyChanged(nameof(TimeOffset));
                     NotifyPropertyChanged(nameof(TimeScale));
@@ -221,5 +252,16 @@ namespace BeatSinger.UI
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
         public event PropertyChangedEventHandler PropertyChanged;
+
+        [UIAction("#post-parse")]
+        public void PostParse()
+        {
+            if (sliderSettingHandler.Props.ContainsKey("onDragReleased"))
+                DragReleaseSupported = true;
+            UpdateSliderBounds(_offsetSlider);
+        }
+
+        private bool DragReleaseSupported;
+        private static SliderSettingHandler sliderSettingHandler = new SliderSettingHandler();
     }
 }
