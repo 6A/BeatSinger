@@ -9,6 +9,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using BeatSaberMarkupLanguage.FloatingScreen;
+using BeatSinger.UI;
+using BeatSaberMarkupLanguage;
 
 namespace BeatSinger
 {
@@ -19,27 +22,10 @@ namespace BeatSinger
 	public class LyricPreviewController : MonoBehaviour
     {
         private SongPreviewPlayer PreviewPlayer;
-        private FlowCoordinator MainFlowCoordinator;
         private LyricsComponent LyricsComponent;
-        private ScreenSystem ScreenSystem => MainFlowCoordinator != null ? Accessors.Access_ScreenSystem(ref MainFlowCoordinator) : null;
-        private HMUI.Screen _mainScreen;
 
-        public HMUI.Screen MainScreen
-        {
-            get
-            {
-                if (_mainScreen == null)
-                {
-                    ScreenSystem screens = ScreenSystem;
-                    _mainScreen = screens?.mainScreen;
-                }
-                return _mainScreen;
-            }
-            set { _mainScreen = value; }
-        }
 
         private AudioSource[] AudioSources;
-        private Vector3 PreviousMainPosition;
         private CancellationTokenSource loadCancellationSource;
         private CancellationTokenSource LoadCancellationSource
         {
@@ -61,7 +47,6 @@ namespace BeatSinger
         private void Awake()
         {
             PreviewPlayer = Resources.FindObjectsOfTypeAll<SongPreviewPlayer>().FirstOrDefault();
-            MainFlowCoordinator = BeatSaberMarkupLanguage.BeatSaberUI.MainFlowCoordinator;
         }
         /// <summary>
         /// Only ever called once on the first frame the script is Enabled. Start is called after every other script's Awake() and before Update().
@@ -69,6 +54,52 @@ namespace BeatSinger
         private void Start()
         {
 
+        }
+        FloatingScreen FloatingScreen;
+        LyricsViewController LyricsView;
+        public void ShowLyricsPanel()
+        {
+            if (FloatingScreen == null)
+            {
+                FloatingScreen = CreateFloatingScreen();
+                LyricsView = BeatSaberUI.CreateViewController<LyricsViewController>();
+                LyricsView.CloseClicked += OnLyricsViewClosedClicked;
+                FloatingScreen.SetRootViewController(LyricsView, false);
+                SetScreenTransform(FloatingScreen, new Pose(new Vector3(0, 1.6f, 2.4f), Quaternion.identity));
+            }
+            FloatingScreen?.gameObject.SetActive(true);
+            LyricsView?.gameObject.SetActive(true);
+        }
+        public void HideLyricsPanel()
+        {
+            LyricsView?.Clear();
+            FloatingScreen?.gameObject.SetActive(false);
+            LyricsView?.gameObject.SetActive(false);
+        }
+
+        private void OnLyricsViewClosedClicked(object sender, EventArgs e)
+        {
+            if(sender is LyricsViewController view)
+            {
+                view.gameObject.SetActive(false);
+            }
+            HideLyricsPanel();
+        }
+
+        public FloatingScreen CreateFloatingScreen()
+        {
+            FloatingScreen screen = FloatingScreen.CreateFloatingScreen(
+                new Vector2(100, 50), true,
+                Vector3.zero,
+                Quaternion.identity);
+            screen.ShowHandle = false;
+            return screen;
+        }
+
+        internal static void SetScreenTransform(FloatingScreen screen, Pose pose)
+        {
+            screen.transform.position = pose.position;
+            screen.transform.rotation = pose.rotation;
         }
 
         /// <summary>
@@ -83,14 +114,8 @@ namespace BeatSinger
                 return;
             }
             AudioClip audioClip = await Plugin.SelectedLevel.GetPreviewAudioClipAsync(loadCancellationSource.Token);
+            ShowLyricsPanel();
 
-            HMUI.Screen screen = MainScreen;
-            if (screen != null)
-            {
-                if (screen.transform.position.y < 50)
-                    PreviousMainPosition = screen.transform.position;
-                screen.transform.position = new Vector3(PreviousMainPosition.x, 100, PreviousMainPosition.z);
-            }
             audioClip.LoadAudioData();
             if (audioClip.loadState != AudioDataLoadState.Loaded)
             {
@@ -111,7 +136,7 @@ namespace BeatSinger
             if (audioClip != null && AudioSources != null && AudioSources.Length > 0)
             {
                 LyricsComponent = gameObject.AddComponent<LyricsComponent>();
-                ILyricSpawner spawner = gameObject.AddComponent<SimpleLyricSpawner>();
+                ILyricSpawner spawner = LyricsView;
                 LyricsComponent.Initialize(new PreviewAudioSource(audioClip, AudioSources), spawner, Plugin.SelectedLevelSubtitles);
             }
         }
@@ -122,11 +147,8 @@ namespace BeatSinger
         private void OnDisable()
         {
             LoadCancellationSource = null;
-            HMUI.Screen screen = MainScreen;
-            if (screen != null)
-            {
-                screen.transform.position = PreviousMainPosition;
-            }
+            HideLyricsPanel();
+
             PreviewPlayer?.FadeOut();
             AudioSources = null;
             if (LyricsComponent != null)
@@ -141,6 +163,16 @@ namespace BeatSinger
         /// </summary>
         private void OnDestroy()
         {
+            if (LyricsView != null)
+            {
+                Destroy(LyricsView);
+                LyricsView = null;
+            }
+            if (FloatingScreen != null)
+            {
+                Destroy(FloatingScreen);
+                FloatingScreen = null;
+            }
 
         }
         #endregion

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using Zenject;
 using BeatSinger.Components;
+using BS_Utils.Utilities;
 
 namespace BeatSinger
 {
@@ -24,6 +25,18 @@ namespace BeatSinger
         public override void Awake()
         {
             enabled = true;
+            BSEvents.songPaused += OnSongPaused;
+            BSEvents.songUnpaused += OnSongUnpaused;
+        }
+
+        private void OnSongUnpaused()
+        {
+            // TODO: Handle game pauses
+        }
+
+        private void OnSongPaused()
+        {
+            // TODO: Handle game pauses
         }
 
         public IEnumerator Start()

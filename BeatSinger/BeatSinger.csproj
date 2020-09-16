@@ -16,12 +16,16 @@
 
   <ItemGroup>
     <None Remove="manifest.json" />
+    <None Remove="UI\LyricsViewController.bsml" />
     <None Remove="UI\ModifiersView.bsml" />
     <None Remove="UI\SettingsView.bsml" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="manifest.json" />
+    <EmbeddedResource Include="UI\LyricsViewController.bsml">
+      <DependentUpon>LyricsViewController.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UI\ModifiersView.bsml" />
     <EmbeddedResource Include="UI\SettingsView.bsml" />
   </ItemGroup>
