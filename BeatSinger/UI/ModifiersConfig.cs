@@ -1,17 +1,27 @@
 ﻿using BeatSaberMarkupLanguage.Attributes;
 using BeatSaberMarkupLanguage.Components.Settings;
 using BeatSaberMarkupLanguage.Notify;
+using BeatSaberMarkupLanguage.Parser;
 using BeatSaberMarkupLanguage.TypeHandlers.Settings;
 using BeatSinger.Helpers;
+using HMUI;
+using IPA.Utilities;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace BeatSinger.UI
 {
     public class ModifiersConfig : INotifiableHost
     {
+
         [UIAction("OnDragReleased")]
         private void OnDragRelease()
         {
@@ -20,7 +30,6 @@ namespace BeatSinger.UI
 
         [UIComponent("OffsetSlider")]
         protected SliderSetting _offsetSlider;
-
 
         public ModifiersConfig()
         {
@@ -85,7 +94,10 @@ namespace BeatSinger.UI
         [UIValue(nameof(TimeOffset))]
         public float TimeOffset
         {
-            get { return _timeOffset; }
+            get
+            {
+                return _timeOffset;
+            }
             set
             {
                 if (_timeOffset == value) return;
@@ -256,12 +268,14 @@ namespace BeatSinger.UI
         [UIAction("#post-parse")]
         public void PostParse()
         {
-            if (sliderSettingHandler.Props.ContainsKey("onDragReleased"))
+            if (Type.GetType(DragHelperName) != null)
+            {
                 DragReleaseSupported = true;
+            }
             UpdateSliderBounds(_offsetSlider);
         }
 
         private bool DragReleaseSupported;
-        private static SliderSettingHandler sliderSettingHandler = new SliderSettingHandler();
+        public static readonly string DragHelperName = $"BeatSaberMarkupLanguage.Components.Settings.DragHelper, {typeof(SliderSettingHandler).Assembly.FullName}";
     }
 }
