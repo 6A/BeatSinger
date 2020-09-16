@@ -73,7 +73,7 @@ namespace BeatSinger.UI
                 NotifyPropertyChanged(nameof(CurrentTextColor));
             }
         }
-        public string CurrentTextColor => ColorUtility.ToHtmlStringRGBA(CurrentTextColorRaw);
+        public string CurrentTextColor => $"#{ColorUtility.ToHtmlStringRGBA(CurrentTextColorRaw)}";
 
 
         int poll;
