@@ -7,8 +7,6 @@
     <slider-setting text='Time Scale' value='TimeScale' formatter='formatter-percent' interactable='~ConfigEnabled' 
                     hover-hint='Multiply lyric timings by this %. You probably do not need this.'
                     bind-value='true' apply-on-change='true' min='.1' max='2' increment='.05' />
-    <list-slider-setting text='test' value='TestValue' options='TestOptions' apply-on-change='true' 
-                    onDragStarted='OnDragStarted' onDragReleased='OnDragReleased' updateDuringDrag='false' />
     <button text='Fetch Online' on-click='Fetch' interactable='~FetchEnabled' />
     <button text='Save' on-click='SaveSettings' hover-hint='Save settings to the local lyrics file.' interactable='~ConfigEnabled' />
     <button text='~PlayButtonText' on-click='PlaySong' hover-hint='Test lyric timings.' interactable='~ConfigEnabled' />

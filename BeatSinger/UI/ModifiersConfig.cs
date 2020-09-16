@@ -94,10 +94,7 @@ namespace BeatSinger.UI
         [UIValue(nameof(TimeOffset))]
         public float TimeOffset
         {
-            get
-            {
-                return _timeOffset;
-            }
+            get { return _timeOffset; }
             set
             {
                 if (_timeOffset == value) return;
