@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <BeatSaberDir>A:\Program Files\Steam\steamapps\common\Beat Saber</BeatSaberDir>
-    <AssemblyVersion>1.1.0</AssemblyVersion>
-    <Authors>Grégoire Geis</Authors>
+    <AssemblyVersion>1.2.0</AssemblyVersion>
+    <Authors>Grégoire Geis, Zingabopp</Authors>
     <Description>Displays song lyrics in-game.</Description>
     <RepositoryUrl>https://github.com/71/BeatSinger</RepositoryUrl>
     <PackageProjectUrl>https://github.com/71/BeatSinger</PackageProjectUrl>
