@@ -1,0 +1,23 @@
+﻿<settings-container xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <bool-setting text='Enabled' value='DisplayLyrics' bind-value='false' apply-on-change='true' />
+  <bool-setting text='Enable Toggle Key' value='EnableToggleKey' hover-hint='Enable key bind for toggling lyrics in-song.' bind-value='false' apply-on-change='true' />
+  <slider-setting text='Display Delay' value='DisplayDelay' increment='0.1' min='-5' max='5' apply-on-change='true' />
+  <slider-setting text='Hide Delay' value='HideDelay' increment='0.1' min='-5' max='5' apply-on-change='true' />
+  <bool-setting text='Save Fetched Lyrics' value='SaveFetchedLyrics' apply-on-change='true' />
+  <settings-submenu text='Text Style'>
+    <settings-container>
+      <clickable-text text='Back' click-event='back' />
+      <bool-setting text='Enable Shake' value='EnableShake' apply-on-change='true' />
+      <slider-setting text='Text Size' value='TextSize' increment='0.5' min='0.5' max='15' apply-on-change='true' />
+      <color-setting text='Color' value='TextColor' apply-on-change='true' />
+      <settings-submenu text='Position'>
+        <settings-container>
+          <clickable-text text='Back' click-event='back' />
+          <slider-setting text='X Position' value='PosX' increment='0.5' min='-10' max='10' apply-on-change='true' />
+          <slider-setting text='Y Position' value='PosY' increment='0.5' min='-10' max='10' apply-on-change='true' />
+          <slider-setting text='Z Position' value='PosZ' increment='0.5' min='-10' max='10' apply-on-change='true' />
+        </settings-container>
+      </settings-submenu>
+    </settings-container>
+  </settings-submenu>
+</settings-container>

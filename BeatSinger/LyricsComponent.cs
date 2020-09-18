@@ -1,230 +1,131 @@
+using BeatSinger.Helpers;
+using IPA.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
+using Zenject;
+using BeatSinger.Components;
 
 namespace BeatSinger
 {
     /// <summary>
     ///   Defines the main component of BeatSinger, which displays lyrics on loaded songs.
     /// </summary>
-    public sealed class LyricsComponent : MonoBehaviour
+    public class LyricsComponent : MonoBehaviour
     {
-        private const BindingFlags NON_PUBLIC_INSTANCE = BindingFlags.NonPublic | BindingFlags.Instance;
+        public bool Initialized { get; private set; }
+        private ILyricSpawner textSpawner;
+        private IAudioSource audio;
+        private SubtitleContainer Subtitles;
 
-        private static readonly FieldInfo AudioTimeSyncField
-            = typeof(GameSongController).GetField("_audioTimeSyncController", NON_PUBLIC_INSTANCE);
-
-        private static readonly FieldInfo SceneSetupDataField
-            = typeof(GameplayCoreSceneSetupData).GetField("_sceneSetupData", NON_PUBLIC_INSTANCE);
-
-        private static readonly FieldInfo ContainerField
-            = typeof(Zenject.MonoInstallerBase).GetField("<Container>k__BackingField", NON_PUBLIC_INSTANCE);
-
-        private static readonly FieldInfo FlyingTextEffectPoolField
-            = typeof(FlyingTextSpawner).GetField("_flyingTextEffectPool", NON_PUBLIC_INSTANCE);
-
-        private static readonly Func<FlyingTextSpawner, float> GetTextSpawnerDuration;
-        private static readonly Action<FlyingTextSpawner, float> SetTextSpawnerDuration;
-
-        static LyricsComponent()
+        public void Initialize(IAudioSource source, ILyricSpawner lyricSpawner, SubtitleContainer subtitles)
         {
-            FieldInfo durationField = typeof(FlyingTextSpawner).GetField("_duration", NON_PUBLIC_INSTANCE);
-
-            if (durationField == null)
-                throw new Exception("Cannot find _duration field of FlyingTextSpawner.");
-
-            // Create dynamic setter
-            DynamicMethod setterMethod = new DynamicMethod("SetDuration", typeof(void), new[] { typeof(FlyingTextSpawner), typeof(float) }, typeof(FlyingTextSpawner));
-            ILGenerator setterIl = setterMethod.GetILGenerator(16);
-
-            setterIl.Emit(OpCodes.Ldarg_0);
-            setterIl.Emit(OpCodes.Ldarg_1);
-            setterIl.Emit(OpCodes.Stfld, durationField);
-            setterIl.Emit(OpCodes.Ret);
-
-            SetTextSpawnerDuration = setterMethod.CreateDelegate(typeof(Action<FlyingTextSpawner, float>))
-                                  as Action<FlyingTextSpawner, float>;
-
-            // Create dynamic getter
-            DynamicMethod getterMethod = new DynamicMethod("GetDuration", typeof(float), new[] { typeof(FlyingTextSpawner) }, typeof(FlyingTextSpawner));
-            ILGenerator getterIl = getterMethod.GetILGenerator(16);
-
-            getterIl.Emit(OpCodes.Ldarg_0);
-            getterIl.Emit(OpCodes.Ldfld, durationField);
-            getterIl.Emit(OpCodes.Ret);
-
-            GetTextSpawnerDuration = getterMethod.CreateDelegate(typeof(Func<FlyingTextSpawner, float>))
-                                  as Func<FlyingTextSpawner, float>;
+            audio = source ?? throw new ArgumentNullException(nameof(source));
+            textSpawner = lyricSpawner ?? throw new ArgumentNullException(nameof(lyricSpawner));
+            Subtitles = subtitles ?? throw new ArgumentNullException(nameof(subtitles));
+            Initialized = true;
+            enabled = true;
         }
 
-
-        private GameSongController songController;
-        private FlyingTextSpawner textSpawner;
-        private AudioTimeSyncController audio;
-
-        public IEnumerator Start()
+        protected void SpawnText(string text, float duration)
         {
-            // The goal now is to find the clip this scene will be playing.
-            // For this, we find the single root gameObject (which is the gameObject
-            // to which we are attached),
-            // then we get its GameSongController to find the audio clip,
-            // and its FlyingTextSpawner to display the lyrics.
-
-            if (Settings.VerboseLogging)
-            {
-                Debug.Log( "[Beat Singer] Attached to scene.");
-                Debug.Log($"[Beat Singer] Lyrics are enabled: {Settings.DisplayLyrics}.");
-            }
-
-            textSpawner = FindObjectOfType<FlyingTextSpawner>();
-            songController = FindObjectOfType<GameSongController>();
-
-            var sceneSetup = FindObjectOfType<GameplayCoreSceneSetup>();
-
-            if (songController == null || sceneSetup == null)
-                yield break;
-
-            if (textSpawner == null)
-            {
-                var installer = FindObjectOfType<EffectPoolsInstaller>();
-                var container = (Zenject.DiContainer)ContainerField.GetValue(installer);
-
-                textSpawner = container.InstantiateComponentOnNewGameObject<FlyingTextSpawner>();
-            }
-
-            var sceneSetupData = (GameplayCoreSceneSetupData)SceneSetupDataField.GetValue(sceneSetup);
-
-            if (sceneSetupData == null)
-                yield break;
-
-            audio = (AudioTimeSyncController)AudioTimeSyncField.GetValue(songController);
-
-            IBeatmapLevel level = sceneSetupData.difficultyBeatmap.level;
-            List<Subtitle> subtitles = new List<Subtitle>();
-
-            Debug.Log($"[Beat Singer] Corresponding song data found: {level.songName} by {level.songAuthorName} ({(level.songSubName != null ? level.songSubName : "No sub-name")}).");
-
-            if (LyricsFetcher.GetLocalLyrics(sceneSetupData.difficultyBeatmap.level.levelID, subtitles))
-            {
-                Debug.Log( "[Beat Singer] Found local lyrics.");
-                Debug.Log($"[Beat Singer] These lyrics can be uploaded online using the ID: \"{level.GetLyricsHash()}\".");
-
-                // Lyrics found locally, continue with them.
-                SpawnText("Lyrics found locally", 3f);
-            }
+            if (textSpawner != null)
+                textSpawner.SpawnText(text, duration);
             else
-            {
-                Debug.Log("[Beat Singer] Did not find local lyrics, trying online lyrics...");
-
-                // When this coroutine ends, it will call the given callback with a list
-                // of all the subtitles we found, and allow us to react.
-                // If no subs are found, the callback is not called.
-                yield return StartCoroutine(LyricsFetcher.GetOnlineLyrics(level, subtitles));
-
-                if (subtitles.Count != 0)
-                    goto FoundOnlineLyrics;
-
-                yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles));
-
-                if (subtitles.Count != 0)
-                    goto FoundOnlineLyrics;
-
-                yield return StartCoroutine(LyricsFetcher.GetMusixmatchLyrics(level.songName, level.songSubName, subtitles));
-
-                if (subtitles.Count != 0)
-                    goto FoundOnlineLyrics;
-
-                yield break;
-
-                FoundOnlineLyrics:
-                SpawnText("Lyrics found online", 3f);
-            }
-
-            StartCoroutine(DisplayLyrics(subtitles));
+                Plugin.log?.Warn($"Tried to spawn text, but there is no text spawner.");
         }
+        protected void SpawnText(string text, float duration, bool enableShake, Color? color, float fontSize)
+        {
+            if (textSpawner != null)
+                textSpawner.SpawnText(text, duration, enableShake, color, fontSize);
+            else
+                Plugin.log?.Warn($"Tried to spawn text, but there is no text spawner.");
+        }
+
+        public virtual void Awake()
+        {
+            enabled = false;
+        }
+
+        public void OnEnable()
+        {
+            StartCoroutine(DisplayLyrics());
+        }
+
+        public void OnDisable()
+        {
+            StopCoroutine(DisplayLyrics());
+        }
+
 
         public void Update()
         {
-            if (!Input.GetKeyUp((KeyCode)Settings.ToggleKeyCode))
-                return;
+#if DEBUG
+            if (Input.GetKeyDown(KeyCode.R))
+                Plugin.config.Load();
+#endif
+            if (Plugin.config.EnableToggleKey)
+            {
+                if (!Input.GetKeyUp((KeyCode)Plugin.config.ToggleKeyCode))
+                    return;
 
-            Settings.DisplayLyrics = !Settings.DisplayLyrics;
+                Plugin.config.DisplayLyrics = !Plugin.config.DisplayLyrics;
 
-            SpawnText(Settings.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
+                textSpawner.SpawnText(Plugin.config.DisplayLyrics ? "Lyrics enabled" : "Lyrics disabled", 3f);
+            }
         }
 
-        private IEnumerator DisplayLyrics(IList<Subtitle> subtitles)
+        protected IEnumerator DisplayLyrics()
         {
+            yield return new WaitUntil(() => Initialized);
+            SubtitleContainer subtitles = Subtitles;
+            if (subtitles == null)
+                yield break;
+            if (subtitles.Count == 0)
+            {
+                Plugin.log?.Info("No subtitles to display for this song.");
+                yield break;
+            }
+            int skipped = 0;
+            if (Plugin.config.VerboseLogging)
+                Plugin.log?.Debug($"{subtitles.Count} lyrics found for song. Displaying with offset {subtitles.TimeOffset}s and a scale of {subtitles.TimeScale:P}");
             // Subtitles are sorted by time of appearance, so we can iterate without sorting first.
-            int i = 0;
-
-            // First, skip all subtitles that have already been seen.
+            foreach (var subtitle in subtitles)
             {
                 float currentTime = audio.songTime;
-
-                while (i < subtitles.Count)
+                float subtitleTime = subtitle.Time + Plugin.config.DisplayDelay * (1 / audio.timeScale);
+                // First, skip all subtitles that have already been seen.
+                if (currentTime > subtitleTime)
                 {
-                    Subtitle subtitle = subtitles[i];
-
-                    if (subtitle.Time >= currentTime)
-                        // Subtitle appears after current moment, stop skipping
-                        break;
-
-                    i++;
+                    skipped++;
+                    continue;
                 }
-            }
+                if (skipped > 0)
+                {
+                    if (Plugin.config.VerboseLogging)
+                        Plugin.log?.Debug($"Skipped {skipped} lyrics because they started too soon.");
+                    skipped = 0;
+                }
 
-            if (Settings.VerboseLogging && i > 0)
-                Debug.Log($"[Beat Singer] Skipped {i} lyrics because they started too soon.");
-
-            // Display all lyrics
-            while (i < subtitles.Count)
-            {
                 // Wait for time to display next lyrics
-                yield return new WaitForSeconds(subtitles[i++].Time - audio.songTime + Settings.DisplayDelay);
-
-                if (!Settings.DisplayLyrics)
+                yield return new WaitForSeconds((subtitleTime - currentTime) * (1 / audio.timeScale));
+                if (!Plugin.config.DisplayLyrics)
                     // Don't display lyrics this time
                     continue;
 
-                // We good, display lyrics
-                Subtitle subtitle = subtitles[i - 1];
+                currentTime = audio.songTime;
+                float displayDuration = ((subtitle.EndTime ?? audio.songEndTime) - currentTime) * (1 / audio.timeScale);
+                if (Plugin.config.VerboseLogging)
+                    Plugin.log?.Debug($"At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
 
-                float displayDuration,
-                      currentTime = audio.songTime;
-
-                if (subtitle.EndTime.HasValue)
-                {
-                    displayDuration = subtitle.EndTime.Value - currentTime;
-                }
-                else
-                {
-                    displayDuration = i == subtitles.Count
-                                    ? audio.songLength - currentTime
-                                    : subtitles[i].Time - currentTime;
-                }
-
-                if (Settings.VerboseLogging)
-                    Debug.Log($"[Beat Singer] At {currentTime} and for {displayDuration} seconds, displaying lyrics \"{subtitle.Text}\".");
-
-                SpawnText(subtitle.Text, displayDuration + Settings.HideDelay);
+                textSpawner.SpawnText(subtitle.Text, displayDuration + Plugin.config.HideDelay, Plugin.config.EnableShake, Plugin.config.TextColor, Plugin.config.TextSize);
             }
-        }
-
-        private void SpawnText(string text, float duration)
-        {
-            // Little hack to spawn text for a chosen duration in seconds:
-            // Save the initial float _duration field to a variable,
-            // then set it to the chosen duration, call SpawnText, and restore the
-            // previously saved duration.
-            float initialDuration = GetTextSpawnerDuration(textSpawner);
-
-            SetTextSpawnerDuration(textSpawner, duration);
-            textSpawner.SpawnText(new Vector3(0, 4, 0), Quaternion.identity, Quaternion.identity, text);
-            SetTextSpawnerDuration(textSpawner, initialDuration);
         }
     }
 }

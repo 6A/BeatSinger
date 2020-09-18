@@ -12,64 +12,64 @@ using UnityEngine.Networking;
 
 namespace BeatSinger
 {
+    using BeatSinger.Helpers;
     using SimpleJSON;
-
-    /// <summary>
-    ///   Defines a subtitle.
-    /// </summary>
-    public sealed class Subtitle
-    {
-        public string Text    { get; }
-        public float  Time    { get; }
-        public float? EndTime { get; }
-
-        public Subtitle(JSONNode node)
-        {
-            JSONNode time = node["time"];
-
-            if (time == null)
-                throw new Exception("Subtitle did not have a 'time' property.");
-
-            Text = node["text"];
-
-            if (time.IsNumber)
-            {
-                Time = time;
-
-                if (node["end"])
-                    EndTime = node["end"];
-            }
-            else
-            {
-                Time = time["total"];
-            }
-        }
-
-        public Subtitle(string text, float time, float end)
-        {
-            Text = text;
-            Time = time;
-            EndTime = end;
-        }
-    }
+    using System.Threading.Tasks;
 
     /// <summary>
     ///   Provides utilities for asynchronously fetching lyrics.
     /// </summary>
     public static class LyricsFetcher
     {
-        private static void PopulateFromJson(string json, List<Subtitle> subtitles)
+        public static event EventHandler<IPreviewBeatmapLevel> LyricsOnlineFetchStarted;
+        public static event EventHandler<LyricsFetchedEventArgs> LyricsOnlineFetchFinished;
+        public static bool FetchInProgress { get; private set; }
+        private static void PopulateFromJson(string jsonString, List<Subtitle> subtitles)
         {
-            JSONArray subtitlesArray = JSON.Parse(json).AsArray;
+            JSONNode json = JSON.Parse(jsonString);
+            JSONArray subtitlesArray;
+            if (json.IsArray)
+                subtitlesArray = json.AsArray;
+            else
+                subtitlesArray = json["subtitles"].AsArray;
+            PopulateFromJson(subtitlesArray, subtitles);
+        }
+        private static void PopulateFromJson(JSONArray jAry, List<Subtitle> subtitles)
+        {
+            subtitles.Capacity = jAry.Count;
 
-            subtitles.Capacity = subtitlesArray.Count;
-
-            foreach (JSONNode node in subtitlesArray)
+            foreach (JSONNode node in jAry)
             {
                 subtitles.Add(new Subtitle(node));
             }
         }
 
+        private static void PopulateFromJson(string jsonString, SubtitleContainer container)
+        {
+            JSONNode json = JSON.Parse(jsonString);
+            JSONArray subtitlesArray;
+            float timeScale = 1;
+            if (json.IsArray)
+                subtitlesArray = json.AsArray;
+            else
+            {
+                container.TimeOffset = json["timeOffset"].AsFloat;
+                timeScale = json["timeScale"].AsFloat;
+                subtitlesArray = json["subtitles"].AsArray;
+                if (timeScale > 0)
+                    container.TimeScale = timeScale;
+            }
+            List<Subtitle> subtitles = new List<Subtitle>(subtitlesArray.Count);
+            PopulateFromJson(subtitlesArray, subtitles);
+
+            container.SetSubtitles(subtitles);
+        }
+
+        /// <summary>
+        ///   Creates a <see cref="SubtitleContainer"/> from an SRT file. Return null if unsuccessful.
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <returns></returns>
         private static void PopulateFromSrt(TextReader reader, List<Subtitle> subtitles)
         {
             // Parse using a simple state machine:
@@ -77,24 +77,29 @@ namespace BeatSinger
             //   1: Parsing start / end time
             //   2: Parsing text
             byte state = 0;
-
+            bool invalid = false;
             float startTime = 0f,
                   endTime = 0f;
 
             StringBuilder text = new StringBuilder();
             string line;
-
-            while ((line = reader.ReadLine()) != null)
+            int lineNumber = 0;
+            while ((line = reader.ReadLine()) != null && !invalid)
             {
+                lineNumber++;
                 switch (state)
                 {
                     case 0:
-                        if (string.IsNullOrEmpty(line))
+                        if (string.IsNullOrWhiteSpace(line))
                             // No number found; continue in same state.
                             continue;
 
                         if (!int.TryParse(line, out int _))
-                            goto Invalid;
+                        {
+                            Plugin.log?.Warn($"Line {lineNumber}: {line} is not an integer.");
+                            invalid = true;
+                            break;
+                        }
 
                         // Number found; continue to next state.
                         state = 1;
@@ -104,8 +109,11 @@ namespace BeatSinger
                         Match m = Regex.Match(line, @"(\d+):(\d+):(\d+,\d+) *--> *(\d+):(\d+):(\d+,\d+)");
 
                         if (!m.Success)
-                            goto Invalid;
-
+                        {
+                            Plugin.log?.Error($"Invalid line in SRT file, line {lineNumber}: '{line}'");
+                            invalid = true;
+                            break;
+                        }
                         startTime = int.Parse(m.Groups[1].Value) * 3600
                                   + int.Parse(m.Groups[2].Value) * 60
                                   + float.Parse(m.Groups[3].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture);
@@ -119,11 +127,10 @@ namespace BeatSinger
                         break;
 
                     case 2:
-                        if (string.IsNullOrEmpty(line))
+                        if (string.IsNullOrWhiteSpace(line))
                         {
                             // End of text; continue to next state.
                             subtitles.Add(new Subtitle(text.ToString(), startTime, endTime));
-
                             text.Length = 0;
                             state = 0;
                         }
@@ -137,27 +144,37 @@ namespace BeatSinger
 
                     default:
                         // Shouldn't happen.
-                        throw new Exception();
+                        throw new Exception($"Invalid syntax in SRT file on line {lineNumber}: '{line}'");
                 }
             }
-
-            Invalid:
-
-            Debug.Log("[Beat Singer] Invalid subtiles file found, cancelling load...");
-            subtitles.Clear();
+            // From https://github.com/y0100100012/BeatSinger/blob/59b49b16b28d30a270d72df3e691d0d923dd2a14/BeatSinger/Helpers/LyricsFetcher.cs#L151
+            //Add Last Subtitle if end is reached with text not empty
+            if (text.Length != 0)
+            {
+                subtitles.Add(new Subtitle(text.ToString(), startTime, endTime));
+                //             Debug.Log($"{text}   {startTime}   {endTime}");
+                text.Length = 0;
+                state = 0;
+            }
+            if (invalid)
+            {
+                Plugin.log?.Warn("Invalid subtiles file found, cancelling load...");
+                subtitles.Clear();
+            }
         }
 
         /// <summary>
         ///   Fetches the lyrics of the given song on the local file system and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static bool GetLocalLyrics(string songId, List<Subtitle> subtitles)
+        public static bool TryGetLocalLyrics(CustomPreviewBeatmapLevel level, out SubtitleContainer container)
         {
-            string songDirectory = Loader.CustomLevels.Values.FirstOrDefault(x => x.levelID == songId)?.customLevelPath;
-
-            Debug.Log($"[Beat Singer] Song directory: {songDirectory}.");
-
-            if (songDirectory == null)
+            container = SubtitleContainer.Empty;
+            if (level == null)
+                return false;
+            string songDirectory = level.customLevelPath;
+            Plugin.log?.Debug($"Song directory: {songDirectory}.");
+            if (string.IsNullOrWhiteSpace(songDirectory) || !Directory.Exists(songDirectory))
                 return false;
 
             // Find JSON lyrics
@@ -165,9 +182,11 @@ namespace BeatSinger
 
             if (File.Exists(jsonFile))
             {
-                PopulateFromJson(File.ReadAllText(jsonFile), subtitles);
-
-                return true;
+                PopulateFromJson(File.ReadAllText(jsonFile), container);
+                container.Source = jsonFile;
+                container.SourceType = LyricSource.File_JSON;
+                if (container.Count > 0)
+                    return true;
             }
 
             // Find SRT lyrics
@@ -178,21 +197,110 @@ namespace BeatSinger
                 using (FileStream fs = File.OpenRead(srtFile))
                 using (StreamReader reader = new StreamReader(fs))
                 {
+                    List<Subtitle> subtitles = new List<Subtitle>();
                     PopulateFromSrt(reader, subtitles);
-
-                    return true;
+                    container.Source = srtFile;
+                    container.SourceType = LyricSource.File_SRT;
+                    if (subtitles.Count > 0)
+                    {
+                        container.SetSubtitles(subtitles);
+                        return true;
+                    }
                 }
-
             }
-
             return false;
         }
 
+        public static IEnumerator FetchOnlineLyrics(IPreviewBeatmapLevel level, SubtitleContainer container)
+        {
+            if (level == null)
+                yield break;
+            if (FetchInProgress)
+                yield break;
+            LyricsOnlineFetchStarted.RaiseEventSafe(null, level, nameof(LyricsOnlineFetchStarted));
+            Plugin.log?.Debug($"Searching for lyrics for {level.songName} by {level.songAuthorName}");
+            FetchInProgress = true;
+            try
+            {
+                CustomPreviewBeatmapLevel customLevel = level as CustomPreviewBeatmapLevel;
+                List<Subtitle> subtitles = new List<Subtitle>();
+                yield return GetBeatSingerOnlineLyrics(level, subtitles);
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "beatsinger.herokuapp.com";
+                    container.SourceType = LyricSource.Online_BeatSinger;
+                    goto FoundOnlineLyrics;
+                }
+
+                if (!string.IsNullOrEmpty(level.songAuthorName))
+                    yield return GetMusixmatchLyrics(level.songName, level.songAuthorName, subtitles);
+                else
+                    Plugin.log?.Debug($"Song has no artist name.");
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "MusixMatch";
+                    container.SourceType = LyricSource.Online_MusixMatch;
+                    goto FoundOnlineLyrics;
+                }
+                if (!string.IsNullOrEmpty(level.songSubName))
+                    yield return GetMusixmatchLyrics(level.songName, level.songSubName, subtitles);
+                else
+                    Plugin.log?.Debug($"Song has no subname.");
+
+                if (subtitles.Count != 0)
+                {
+                    container.Source = "MusixMatch";
+                    container.SourceType = LyricSource.Online_MusixMatch;
+                    goto FoundOnlineLyrics;
+                }
+
+                yield break;
+
+            FoundOnlineLyrics:
+                string songDir = customLevel?.customLevelPath;
+                container.SetSubtitles(subtitles);
+                if (Plugin.config.SaveFetchedLyrics)
+                {
+                    if (!string.IsNullOrEmpty(songDir))
+                    {
+                        Task.Run(() =>
+                        {
+                            string lyricsPath = Path.Combine(songDir, "lyrics.json");
+                            try
+                            {
+                                if (!File.Exists(lyricsPath))
+                                {
+                                    File.WriteAllText(lyricsPath, container.ToJson().ToString(3));
+                                    Plugin.log?.Info($"Saved fetched lyrics to '{lyricsPath}'");
+                                }
+                                else
+                                    Plugin.log?.Warn($"Unable to save lyrics, file already exists: '{lyricsPath}'");
+                            }
+                            catch (Exception e)
+                            {
+                                Plugin.log?.Error($"Error saving fetched lyrics to '{lyricsPath}': {e.Message}");
+                                Plugin.log?.Debug(e);
+                            }
+                        });
+                    }
+                    else
+                        Plugin.log?.Warn($"Unable save lyrics, song directory couldn't be determined.");
+                }
+            }
+            finally
+            {
+                FetchInProgress = false;
+                LyricsOnlineFetchFinished.RaiseEventSafe(null, new LyricsFetchedEventArgs(level, container), nameof(LyricsOnlineFetchFinished));
+            }
+        }
+
         /// <summary>
-        ///   Fetches the lyrics of the given song online asynchronously and, if they're found,
-        ///   populates the given list.
+        ///   Fetches the lyrics of the given song online asynchronously from the BeatSinger website
+        ///   and, if they're found, populates the given list.
         /// </summary>
-        public static IEnumerator GetOnlineLyrics(IBeatmapLevel level, List<Subtitle> subtitles)
+        private static IEnumerator GetBeatSingerOnlineLyrics(IPreviewBeatmapLevel level, List<Subtitle> subtitles)
         {
             // Perform request
             UnityWebRequest req = UnityWebRequest.Get($"https://beatsinger.herokuapp.com/{level.GetLyricsHash()}");
@@ -201,7 +309,7 @@ namespace BeatSinger
 
             if (req.isNetworkError || req.isHttpError)
             {
-                Debug.Log(req.error);
+                Plugin.log?.Warn($"Error getting lyrics from 'beatsinger.herokuapp.com': { req.error}");
             }
             else if (req.responseCode == 200)
             {
@@ -220,7 +328,8 @@ namespace BeatSinger
                 }
                 catch (Exception e)
                 {
-                    Debug.LogException(e);
+                    Plugin.log?.Error($"Error parsing lyrics response: {e.Message}");
+                    Plugin.log?.Debug(e);
                 }
             }
 
@@ -231,19 +340,20 @@ namespace BeatSinger
         ///   Fetches the lyrics of the given song online asynchronously using Musixmatch and, if they're found,
         ///   populates the given list.
         /// </summary>
-        public static IEnumerator GetMusixmatchLyrics(string song, string artist, List<Subtitle> subtitles)
+        private static IEnumerator GetMusixmatchLyrics(string song, string artist, List<Subtitle> subtitles)
         {
             // Perform request
-            string qTrack  = UnityWebRequest.EscapeURL(song);
+            string qTrack = UnityWebRequest.EscapeURL(song);
             string qArtist = UnityWebRequest.EscapeURL(artist);
 
             string url = "https://apic-desktop.musixmatch.com/ws/1.1/macro.subtitles.get"
-                       +$"?format=json&q_track={qTrack}&q_artist={qArtist}&user_language=en"
+                       + $"?format=json&q_track={qTrack}&q_artist={qArtist}&user_language=en"
                        + "&userblob_id=aG9va2VkIG9uIGEgZmVlbGluZ19ibHVlIHN3ZWRlXzE3Mg"
                        + "&subtitle_format=mxm&app_id=web-desktop-app-v1.0"
                        + "&usertoken=180220daeb2405592f296c4aea0f6d15e90e08222b559182bacf92";
 
-
+            if (Plugin.config.VerboseLogging)
+                Plugin.log?.Debug($"Requesting lyrics from '{url}'");
             UnityWebRequest req = UnityWebRequest.Get(url);
 
             req.SetRequestHeader("Cookie", "x-mxm-token-guid=cd25ed55-85ea-445b-83cd-c4b173e20ce7");
@@ -252,49 +362,144 @@ namespace BeatSinger
 
             if (req.isNetworkError || req.isHttpError)
             {
-                Debug.Log(req.error);
+                Plugin.log?.Error($"Network error getting lyrics from MusixMatch: {req.error}");
             }
             else
             {
                 // Request done, process result
                 try
                 {
-                    JSONNode res = JSON.Parse(req.downloadHandler.text);
-                    JSONNode subtitleObject = res["message"]["body"]["macro_calls"]["track.subtitles.get"]
-                                                 ["message"]["body"]["subtitle_list"]
-                                                 .AsArray[0]["subtitle"];
 
-                    JSONArray subtitlesArray = JSON.Parse(subtitleObject["subtitle_body"].Value).AsArray;
-
-                    // No need to sort subtitles here, it should already be done.
-                    subtitles.Capacity = subtitlesArray.Count;
-
-                    foreach (JSONNode node in subtitlesArray)
+                    JSONArray subtitlesArray = ParseMusixMatchResponse(req.downloadHandler.text);
+                    if (subtitlesArray != null)
                     {
-                        subtitles.Add(new Subtitle(node));
+                        // No need to sort subtitles here, it should already be done.
+                        subtitles.Capacity = subtitlesArray.Count;
+
+                        foreach (JSONNode node in subtitlesArray)
+                        {
+                            subtitles.Add(new Subtitle(node));
+                        }
                     }
                 }
-                catch (NullReferenceException)
+                catch (NullReferenceException e)
                 {
                     // JSON key not found.
+                    Plugin.log?.Error($"Error parsing MusixMatch lyrics json response. Response is missing an expected key.");
+                    Plugin.log?.Debug(e);
+                    if (Plugin.config.VerboseLogging)
+                    {
+                        Plugin.log?.Debug(req.downloadHandler.text);
+                    }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogException(e);
+                    Plugin.log?.Error($"Error parsing MusixMatch lyrics json response: {e.Message}");
+                    Plugin.log?.Debug(e);
                 }
             }
 
             req.Dispose();
         }
 
+        public static JSONArray ParseMusixMatchResponse(string jsonResponse)
+        {
+            JSONNode res = JSON.Parse(jsonResponse);
+            MusixMatchStatus status = (MusixMatchStatus)res["message"]["header"]["status_code"].AsInt;
+            if (status != MusixMatchStatus.Success)
+            {
+                Plugin.log?.Error($"Error getting lyrics from MusixMatch: {status.GetReasonString()}");
+                return null;
+            }
+            JSONNode lyricResponse = res["message"]["body"]["macro_calls"]["track.subtitles.get"]["message"];
+            MusixMatchStatus lyricResponseStatus = (MusixMatchStatus)lyricResponse["header"]["status_code"].AsInt;
+
+            switch (lyricResponseStatus)
+            {
+                case MusixMatchStatus.NotFound:
+                    Plugin.log?.Info($"Lyrics not found on MusixMatch.");
+                    return null;
+                default:
+                    if (Plugin.config.VerboseLogging)
+                        Plugin.log?.Debug($"MusixMatch lyric response status is '{lyricResponseStatus}': {lyricResponseStatus.GetReasonString()}");
+                    break;
+            }
+            JSONNode subtitleObject = lyricResponse["body"]["subtitle_list"]
+                                         .AsArray[0]["subtitle"];
+
+            JSONArray subtitlesArray = JSON.Parse(subtitleObject["subtitle_body"].Value).AsArray;
+            if (subtitlesArray == null)
+                Plugin.log?.Warn($"MusixMatch does not have lyrics for this song.");
+            return subtitlesArray;
+        }
+
         /// <summary>
         ///   Gets an ID that can be used to identify lyrics on the Beat Singer lyrics resolver.
         /// </summary>
-        public static string GetLyricsHash(this IBeatmapLevel level)
+        public static string GetLyricsHash(this IPreviewBeatmapLevel level)
         {
             string id = string.Join(", ", level.songName, level.songAuthorName, level.songSubName, level.beatsPerMinute, level.songDuration, level.songTimeOffset);
 
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(id));
         }
+    }
+
+    public class LyricsFetchedEventArgs
+    {
+        public readonly IPreviewBeatmapLevel BeatmapLevel;
+        public readonly SubtitleContainer Subtitles;
+        public LyricsFetchedEventArgs(IPreviewBeatmapLevel level, SubtitleContainer subtitles)
+        {
+            BeatmapLevel = level;
+            Subtitles = subtitles;
+        }
+    }
+
+    /// <summary>
+    /// Status codes that MusixMatch may respond with in the header.
+    /// https://developer.musixmatch.com/documentation/status-codes
+    /// </summary>
+    public enum MusixMatchStatus
+    {
+        /// <summary>
+        /// No status
+        /// </summary>
+        None = 0,
+        /// <summary>
+        /// The request was successful.
+        /// </summary>
+        Success = 200,
+        /// <summary>
+        /// The request had bad syntax or was inherently impossible to be satisfied.
+        /// </summary>
+        BadRequest = 400,
+        /// <summary>
+        /// Authentication failed, probably because of invalid/missing API key.
+        /// </summary>
+        Unauthorized = 401,
+        /// <summary>
+        /// The usage limit has been reached, either you exceeded per day requests limits or your balance is insufficient.
+        /// </summary>
+        UsageLimitReached = 402,
+        /// <summary>
+        /// You are not authorized to perform this operation.
+        /// </summary>
+        Forbidden = 403,
+        /// <summary>
+        /// The requested resource was not found.
+        /// </summary>
+        NotFound = 404,
+        /// <summary>
+        /// The requested method was not found.
+        /// </summary>
+        MethodNotFound = 405,
+        /// <summary>
+        /// Ops. Something were wrong.
+        /// </summary>
+        GeneralFailure = 500,
+        /// <summary>
+        /// Our system is a bit busy at the moment and your request can’t be satisfied.
+        /// </summary>
+        ServiceUnavailable = 503
     }
 }

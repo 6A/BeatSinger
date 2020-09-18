@@ -1,0 +1,20 @@
+﻿<bg background='round-rect-panel' background-color='#FFFFFF10' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+  <vertical preferred-width='95' >
+    <horizontal child-align='MiddleRight' preferred-height='5' preferred-width='95' child-control-height='true' child-expand-width='false' >
+      <horizontal child-align='MiddleLeft' pad-top='2' pad-left='5' preferred-width='65' background='round-rect-panel'>
+        <horizontal preferred-width='30' min-width='30' child-align='MiddleLeft' child-expand-width='false'>
+          <text text='Started:' />
+          <text data='FromStart' data-formatter='TimeSpanFormatter' data-format='\ \ %s\.%ff\s' />
+        </horizontal>
+        <horizontal preferred-width='35' min-width='35' child-align='MiddleLeft' child-expand-width='false'>
+          <text text='Time Left:' />
+          <text data='ToEnd' data-formatter='TimeSpanFormatter' data-format='\ \ %s\.%ff\s'/>
+        </horizontal>
+      </horizontal>
+      <button text='Close' on-click='CloseClicked' preferred-height='5' />
+    </horizontal>
+    <vertical preferred-height='45' preferred-width='95' child-control-width='true' child-control-height='true' >
+      <text text='~CurrentText' font-align='Center' font-size='~CurrentTextSize' font-color='~CurrentTextColor' word-wrapping='true' />
+    </vertical>
+  </vertical>
+</bg>
